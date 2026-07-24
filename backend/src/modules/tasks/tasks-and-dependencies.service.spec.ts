@@ -1,18 +1,30 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  INestApplication,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
+import * as request from 'supertest';
+import type { App as SupertestApp } from 'supertest/types';
 import { Repository } from 'typeorm';
 
 import { TaskDependencyType } from '../../common/enums/task-dependency-type.enum';
 import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
+import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { TaskDependenciesService } from '../task-dependencies/task-dependencies.service';
 import { User } from '../users/entities/user.entity';
 import { Task } from './entities/task.entity';
+import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
 const managerUser = createAuthenticatedUser(
@@ -29,6 +41,7 @@ describe('Tasks and task dependencies rules', () => {
   let projectsRepository: InMemoryProjectsRepository;
   let projectMembersRepository: InMemoryProjectMembersRepository;
   let tasksRepository: InMemoryTasksRepository;
+  let taskAssignmentsRepository: InMemoryTaskAssignmentsRepository;
   let taskDependenciesRepository: InMemoryTaskDependenciesRepository;
   let tasksService: TasksService;
   let taskDependenciesService: TaskDependenciesService;
@@ -53,12 +66,14 @@ describe('Tasks and task dependencies rules', () => {
       createProjectMember(project.uuid, regularUser.uuid),
     ]);
     tasksRepository = new InMemoryTasksRepository();
+    taskAssignmentsRepository = new InMemoryTaskAssignmentsRepository();
     taskDependenciesRepository = new InMemoryTaskDependenciesRepository(tasksRepository);
     tasksService = new TasksService(
       tasksRepository as unknown as Repository<Task>,
       projectsRepository as unknown as Repository<Project>,
       projectMembersRepository as unknown as Repository<ProjectMember>,
       taskDependenciesRepository as unknown as Repository<TaskDependency>,
+      taskAssignmentsRepository as unknown as Repository<TaskAssignment>,
     );
     taskDependenciesService = new TaskDependenciesService(
       taskDependenciesRepository as unknown as Repository<TaskDependency>,
@@ -155,6 +170,37 @@ describe('Tasks and task dependencies rules', () => {
     expect(tasksRepository.tasks.find((task) => task.uuid === child.uuid)?.deletedAt).toBeInstanceOf(Date);
   });
 
+  it('allows assigned users to update only their activity status and progress', async () => {
+    const task = await saveTask(tasksRepository, project.uuid);
+    taskAssignmentsRepository.assignments.push(createTaskAssignment(task.uuid, regularUser.uuid));
+
+    await expect(
+      tasksService.updateOwnProgress(
+        task.uuid,
+        { status: TaskStatus.IN_PROGRESS, progress: 45 },
+        regularUser,
+      ),
+    ).resolves.toMatchObject({
+      uuid: task.uuid,
+      status: TaskStatus.IN_PROGRESS,
+      progress: 45,
+      plannedBudget: '0.00',
+      startDate: '2026-08-05',
+    });
+  });
+
+  it('rejects users updating activity progress when the activity is not assigned to them', async () => {
+    const task = await saveTask(tasksRepository, project.uuid);
+
+    await expect(
+      tasksService.updateOwnProgress(
+        task.uuid,
+        { status: TaskStatus.IN_PROGRESS, progress: 45 },
+        regularUser,
+      ),
+    ).rejects.toThrow('ajenas');
+  });
+
   it('rejects self dependencies', async () => {
     const task = await saveTask(tasksRepository, project.uuid);
 
@@ -242,6 +288,69 @@ describe('Tasks and task dependencies rules', () => {
     await expect(
       taskDependenciesService.create(successor.uuid, { predecessorTaskUuid: predecessor.uuid }, managerUser),
     ).rejects.toThrow('fin de la predecesora');
+  });
+});
+
+describe('TasksController restricted user progress endpoint', () => {
+  let app: INestApplication;
+  let httpServer: SupertestApp;
+  const updateOwnProgress = jest.fn();
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [TasksController],
+      providers: [
+        {
+          provide: TasksService,
+          useValue: {
+            updateOwnProgress,
+          },
+        },
+      ],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: { switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } } }) => {
+          context.switchToHttp().getRequest().user = regularUser;
+          return true;
+        },
+      })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
+    await app.init();
+    httpServer = app.getHttpServer() as SupertestApp;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    updateOwnProgress.mockReset();
+  });
+
+  it('rejects budget and date fields on user progress updates', async () => {
+    await request(httpServer)
+      .patch('/tasks/77777777-7777-4777-8777-777777777777/my-progress')
+      .send({
+        status: TaskStatus.IN_PROGRESS,
+        progress: 50,
+        plannedBudget: 100,
+        startDate: '2026-08-06',
+      })
+      .expect(400);
+
+    expect(updateOwnProgress).not.toHaveBeenCalled();
   });
 });
 
@@ -345,6 +454,18 @@ function createTask(projectUuid: string, overrides: Partial<Task> = {}): Task {
   };
 }
 
+function createTaskAssignment(taskUuid: string, userUuid: string): TaskAssignment {
+  return {
+    uuid: randomUUID(),
+    taskUuid,
+    userUuid,
+    assignedHours: '0.00',
+    isMainResponsible: false,
+    task: createTask('', { uuid: taskUuid }),
+    user: createUser(userUuid, UserRole.USER),
+  };
+}
+
 async function saveTask(
   tasksRepository: InMemoryTasksRepository,
   projectUuid: string,
@@ -430,6 +551,24 @@ class InMemoryTasksRepository {
   softRemove(task: Task): Promise<Task> {
     task.deletedAt = new Date('2026-07-24T18:40:00.000Z');
     return Promise.resolve(task);
+  }
+}
+
+class InMemoryTaskAssignmentsRepository {
+  assignments: TaskAssignment[] = [];
+
+  find(options: { where: Partial<TaskAssignment> }): Promise<TaskAssignment[]> {
+    return Promise.resolve(
+      this.assignments.filter((assignment) =>
+        Object.entries(options.where).every(
+          ([key, value]) => assignment[key as keyof TaskAssignment] === value,
+        ),
+      ),
+    );
+  }
+
+  count(options: { where: Partial<TaskAssignment> }): Promise<number> {
+    return this.find(options).then((assignments) => assignments.length);
   }
 }
 

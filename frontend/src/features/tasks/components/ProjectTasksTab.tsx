@@ -2,6 +2,7 @@ import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import {
   Alert,
@@ -31,9 +32,12 @@ import {
   deleteTask,
   listProjectTasks,
   updateTask,
+  updateOwnTaskProgress,
 } from '../services/tasksApi';
-import { Task, TaskPayload } from '../types';
+import { Task, TaskPayload, TaskProgressPayload } from '../types';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
+import { OwnTaskProgressDialog } from './OwnTaskProgressDialog';
+import { TaskAssignmentsDialog } from './TaskAssignmentsDialog';
 import { TaskDependenciesDialog } from './TaskDependenciesDialog';
 import { TaskFormDialog } from './TaskFormDialog';
 import { TaskStatusChip } from './TaskStatusChip';
@@ -62,6 +66,8 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
   } | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [dependenciesTask, setDependenciesTask] = useState<Task | null>(null);
+  const [assignmentsTask, setAssignmentsTask] = useState<Task | null>(null);
+  const [progressTask, setProgressTask] = useState<Task | null>(null);
 
   const loadTasks = useCallback(async () => {
     setIsLoading(true);
@@ -122,6 +128,25 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
       await loadTasks();
     } catch (requestError: unknown) {
       showNotification(getApiErrorMessage(requestError).message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitOwnProgress = async (payload: TaskProgressPayload) => {
+    if (progressTask === null) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await updateOwnTaskProgress(progressTask.uuid, payload);
+      showNotification('Avance actualizado correctamente.', 'success');
+      setProgressTask(null);
+      await loadTasks();
+    } catch (requestError: unknown) {
+      setSubmitError(getApiErrorMessage(requestError).message);
     } finally {
       setIsSubmitting(false);
     }
@@ -224,6 +249,30 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
                     <TableCell align="right">{formatMoney(task.plannedBudget)}</TableCell>
                     <TableCell align="right">{formatMoney(task.actualCost)}</TableCell>
                     <TableCell align="right">
+                      {canManage ? (
+                        <Tooltip title="Asignaciones">
+                          <IconButton
+                            aria-label="Asignaciones"
+                            onClick={() => {
+                              setAssignmentsTask(task);
+                            }}
+                          >
+                            <GroupOutlinedIcon />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title="Actualizar avance">
+                          <IconButton
+                            aria-label="Actualizar avance"
+                            onClick={() => {
+                              setSubmitError(null);
+                              setProgressTask(task);
+                            }}
+                          >
+                            <EditOutlinedIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Dependencias">
                         <IconButton
                           aria-label="Dependencias"
@@ -319,6 +368,28 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
         onClose={() => {
           setDependenciesTask(null);
         }}
+      />
+
+      <TaskAssignmentsDialog
+        open={assignmentsTask !== null}
+        task={assignmentsTask}
+        canManage={canManage}
+        onClose={() => {
+          setAssignmentsTask(null);
+        }}
+        onChanged={loadTasks}
+      />
+
+      <OwnTaskProgressDialog
+        open={progressTask !== null}
+        task={progressTask}
+        isSubmitting={isSubmitting}
+        submitError={submitError}
+        onCancel={() => {
+          setProgressTask(null);
+          setSubmitError(null);
+        }}
+        onSubmit={handleSubmitOwnProgress}
       />
     </Stack>
   );

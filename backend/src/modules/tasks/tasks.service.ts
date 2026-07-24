@@ -12,9 +12,11 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
+import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { TaskResponseDto } from './dto/task-response.dto';
+import { UpdateOwnTaskProgressDto } from './dto/update-own-task-progress.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { Task } from './entities/task.entity';
 
@@ -35,6 +37,8 @@ export class TasksService {
     private readonly projectMembersRepository: Repository<ProjectMember>,
     @InjectRepository(TaskDependency)
     private readonly taskDependenciesRepository: Repository<TaskDependency>,
+    @InjectRepository(TaskAssignment)
+    private readonly taskAssignmentsRepository: Repository<TaskAssignment>,
   ) {}
 
   async create(
@@ -85,13 +89,18 @@ export class TasksService {
       order: { startDate: 'ASC', endDate: 'ASC', name: 'ASC' },
     });
 
-    return tasks.map((task) => TaskResponseDto.fromEntity(task));
+    const visibleTasks =
+      currentUser.role === UserRole.USER
+        ? await this.filterAssignedTasks(tasks, currentUser.uuid)
+        : tasks;
+
+    return visibleTasks.map((task) => TaskResponseDto.fromEntity(task));
   }
 
   async findOne(uuid: string, currentUser: AuthenticatedUser): Promise<TaskResponseDto> {
     const task = await this.findActiveTaskOrFail(uuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
-    await this.ensureCanAccessProject(project, currentUser);
+    await this.ensureCanAccessTask(task, project, currentUser);
 
     return TaskResponseDto.fromEntity(task);
   }
@@ -179,6 +188,33 @@ export class TasksService {
     return TaskResponseDto.fromEntity(savedTask);
   }
 
+  async updateOwnProgress(
+    uuid: string,
+    updateOwnTaskProgressDto: UpdateOwnTaskProgressDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<TaskResponseDto> {
+    const task = await this.findActiveTaskOrFail(uuid);
+    const project = await this.findActiveProjectOrFail(task.projectUuid);
+
+    if (currentUser.role !== UserRole.USER) {
+      throw new ForbiddenException('Use el endpoint general para editar actividades con este rol.');
+    }
+
+    await this.ensureTaskAssignedToUser(task.uuid, currentUser.uuid);
+    await this.ensureCanAccessProject(project, currentUser);
+    this.ensureStatusAndProgressAreConsistent(
+      updateOwnTaskProgressDto.status,
+      updateOwnTaskProgressDto.progress,
+    );
+
+    task.status = updateOwnTaskProgressDto.status;
+    task.progress = updateOwnTaskProgressDto.progress;
+
+    const savedTask = await this.tasksRepository.save(task);
+
+    return TaskResponseDto.fromEntity(savedTask);
+  }
+
   async remove(uuid: string, currentUser: AuthenticatedUser): Promise<void> {
     const task = await this.findActiveTaskOrFail(uuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
@@ -250,6 +286,27 @@ export class TasksService {
     throw new ForbiddenException('No tiene permiso para consultar actividades de este proyecto.');
   }
 
+  private async ensureCanAccessTask(
+    task: Task,
+    project: Project,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    if (currentUser.role === UserRole.ADMIN) {
+      return;
+    }
+
+    if (currentUser.role === UserRole.PROJECT_MANAGER && project.managerUuid === currentUser.uuid) {
+      return;
+    }
+
+    if (currentUser.role === UserRole.USER) {
+      await this.ensureTaskAssignedToUser(task.uuid, currentUser.uuid);
+      return;
+    }
+
+    throw new ForbiddenException('No tiene permiso para consultar esta actividad.');
+  }
+
   private ensureCanManageProject(
     project: Project,
     currentUser: AuthenticatedUser,
@@ -271,6 +328,29 @@ export class TasksService {
     });
 
     return membershipCount > 0;
+  }
+
+  private async ensureTaskAssignedToUser(taskUuid: string, userUuid: string): Promise<void> {
+    const assignmentCount = await this.taskAssignmentsRepository.count({
+      where: { taskUuid, userUuid },
+    });
+
+    if (assignmentCount === 0) {
+      throw new ForbiddenException('No puede modificar ni consultar actividades ajenas.');
+    }
+  }
+
+  private async filterAssignedTasks(tasks: Task[], userUuid: string): Promise<Task[]> {
+    if (tasks.length === 0) {
+      return [];
+    }
+
+    const assignments = await this.taskAssignmentsRepository.find({
+      where: { userUuid },
+    });
+    const assignedTaskUuids = new Set(assignments.map((assignment) => assignment.taskUuid));
+
+    return tasks.filter((task) => assignedTaskUuids.has(task.uuid));
   }
 
   private ensureDateRangeIsValid(startDate: string, endDate: string): void {

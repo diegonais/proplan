@@ -32,6 +32,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { TaskResponseDto } from './dto/task-response.dto';
+import { UpdateOwnTaskProgressDto } from './dto/update-own-task-progress.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
 
@@ -91,6 +92,21 @@ export class TasksController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ): Promise<TaskResponseDto> {
     return this.tasksService.update(uuid, updateTaskDto, currentUser);
+  }
+
+  @Patch('tasks/:uuid/my-progress')
+  @Roles(UserRole.USER)
+  @ApiOperation({ summary: 'Actualizar solo estado y progreso de una actividad asignada al Usuario.' })
+  @ApiOkResponse({ type: TaskResponseDto })
+  @ApiBadRequestResponse({ description: 'Estado y progreso invalidos.' })
+  @ApiForbiddenResponse({ description: 'La actividad no esta asignada al usuario autenticado.' })
+  @ApiNotFoundResponse({ description: 'Actividad no encontrada o eliminada.' })
+  updateOwnProgress(
+    @Param('uuid', ParseUUIDPipe) uuid: string,
+    @Body() updateOwnTaskProgressDto: UpdateOwnTaskProgressDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<TaskResponseDto> {
+    return this.tasksService.updateOwnProgress(uuid, updateOwnTaskProgressDto, currentUser);
   }
 
   @Delete('tasks/:uuid')

@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { EnvironmentVariables, validateEnvironment } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProjectMembersModule } from './modules/project-members/project-members.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { TaskAssignmentsModule } from './modules/task-assignments/task-assignments.module';
 import { TaskDependenciesModule } from './modules/task-dependencies/task-dependencies.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { UsersModule } from './modules/users/users.module';
@@ -39,7 +41,9 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     AuthModule,
     ProjectsModule,
+    ProjectMembersModule,
     TasksModule,
+    TaskAssignmentsModule,
     TaskDependenciesModule,
   ],
 })

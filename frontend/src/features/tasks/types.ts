@@ -31,6 +31,11 @@ export interface TaskPayload {
   parentTaskUuid?: string | null;
 }
 
+export interface TaskProgressPayload {
+  status: TaskStatus;
+  progress: number;
+}
+
 export interface TaskFormValues {
   name: string;
   description: string;
@@ -51,6 +56,23 @@ export interface TaskDependency {
   dependencyType: TaskDependencyType;
   predecessorTask: Task;
   successorTask: Task;
+}
+
+export interface TaskAssignmentUser {
+  uuid: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'PROJECT_MANAGER' | 'USER';
+  isActive: boolean;
+}
+
+export interface TaskAssignment {
+  uuid: string;
+  taskUuid: string;
+  userUuid: string;
+  assignedHours: string;
+  isMainResponsible: boolean;
+  user: TaskAssignmentUser;
 }
 
 export interface TaskDependenciesResponse {

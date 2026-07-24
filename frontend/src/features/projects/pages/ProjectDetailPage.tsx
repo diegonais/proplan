@@ -19,6 +19,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import { useAuth } from '../../auth/authContext';
+import { ProjectTeamTab } from '../../team/components/ProjectTeamTab';
 import { ProjectTasksTab } from '../../tasks/components/ProjectTasksTab';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectStatusChip } from '../components/ProjectStatusChip';
@@ -157,6 +158,7 @@ export function ProjectDetailPage() {
         >
           <Tab label="Resumen" />
           <Tab label="Actividades" />
+          <Tab label="Equipo" />
         </Tabs>
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
           {selectedTab === 0 ? (
@@ -211,9 +213,13 @@ export function ProjectDetailPage() {
                 </>
               ) : null}
             </Stack>
-          ) : (
+          ) : null}
+          {selectedTab === 1 ? (
             <ProjectTasksTab project={project} canManage={canManageProject} />
-          )}
+          ) : null}
+          {selectedTab === 2 ? (
+            <ProjectTeamTab project={project} canManage={canManageProject} />
+          ) : null}
         </Box>
       </Paper>
 
