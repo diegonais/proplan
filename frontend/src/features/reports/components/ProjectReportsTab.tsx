@@ -1,6 +1,9 @@
+import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   LinearProgress,
   Paper,
@@ -15,14 +18,18 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import { formatMoney, formatPercentage } from '../../../utils/money';
 import { Project } from '../../projects/types';
 import { getTaskStatusLabel } from '../../tasks/types';
 import {
+  downloadProjectExcelExport,
+  downloadProjectPdfExport,
   getProjectBudgetReport,
   getProjectStatusReport,
   getProjectWorkloadReport,
+  ProjectExportDownload,
 } from '../services/reportsApi';
 import { ProjectBudgetReport, ProjectStatusReport } from '../types';
 import { WorkloadItem } from '../../team/types';
@@ -38,7 +45,9 @@ export function ProjectReportsTab({ project, canViewFinancialDetails }: ProjectR
   const [budgetReport, setBudgetReport] = useState<ProjectBudgetReport | null>(null);
   const [workload, setWorkload] = useState<WorkloadItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'excel' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { showNotification } = useNotifications();
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -65,6 +74,22 @@ export function ProjectReportsTab({ project, canViewFinancialDetails }: ProjectR
   useEffect(() => {
     void loadReports();
   }, [loadReports]);
+
+  const handleDownload = async (format: 'pdf' | 'excel') => {
+    setDownloadingFormat(format);
+    try {
+      const file =
+        format === 'pdf'
+          ? await downloadProjectPdfExport(project.uuid)
+          : await downloadProjectExcelExport(project.uuid);
+      triggerBrowserDownload(file);
+      showNotification('Exportacion generada correctamente.', 'success');
+    } catch (requestError: unknown) {
+      showNotification(getApiErrorMessage(requestError).message, 'error');
+    } finally {
+      setDownloadingFormat(null);
+    }
+  };
 
   const metrics = useMemo(() => {
     if (statusReport === null) {
@@ -106,7 +131,45 @@ export function ProjectReportsTab({ project, canViewFinancialDetails }: ProjectR
             Carga, avance, presupuesto, actividades vencidas y estado general calculado.
           </Typography>
         </Box>
-        <TrafficLightChip color={statusReport.trafficLight.color} />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+          {canViewFinancialDetails ? (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={
+                  downloadingFormat === 'pdf' ? (
+                    <CircularProgress size={18} aria-label="Descargando PDF" />
+                  ) : (
+                    <PictureAsPdfOutlinedIcon />
+                  )
+                }
+                disabled={downloadingFormat !== null}
+                onClick={() => {
+                  void handleDownload('pdf');
+                }}
+              >
+                Exportar PDF
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={
+                  downloadingFormat === 'excel' ? (
+                    <CircularProgress size={18} aria-label="Descargando Excel" />
+                  ) : (
+                    <TableChartOutlinedIcon />
+                  )
+                }
+                disabled={downloadingFormat !== null}
+                onClick={() => {
+                  void handleDownload('excel');
+                }}
+              >
+                Exportar Excel
+              </Button>
+            </>
+          ) : null}
+          <TrafficLightChip color={statusReport.trafficLight.color} />
+        </Stack>
       </Stack>
 
       <Box
@@ -243,6 +306,19 @@ export function ProjectReportsTab({ project, canViewFinancialDetails }: ProjectR
       </TableContainer>
     </Stack>
   );
+}
+
+function triggerBrowserDownload(file: ProjectExportDownload): void {
+  const objectUrl = URL.createObjectURL(file.blob);
+  const link = document.createElement('a');
+
+  link.href = objectUrl;
+  link.download = file.fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 function resolveAlertSeverity(color: ProjectStatusReport['trafficLight']['color']): 'success' | 'warning' | 'error' {

@@ -130,3 +130,38 @@ No se deben usar identificadores numericos autoincrementales. Las entidades futu
 - Fechas funcionales sin hora se manejaran como `date` en PostgreSQL.
 - Las fechas `date` se intercambiaran como cadenas `YYYY-MM-DD`.
 - No realizar ajustes manuales sumando o restando horas.
+
+## Exportaciones PDF y Excel
+
+Los reportes completos de proyecto se generan desde el backend mediante:
+
+- `GET /api/v1/projects/:projectUuid/exports/pdf`
+- `GET /api/v1/projects/:projectUuid/exports/excel`
+
+Permisos:
+
+- Administrador: puede exportar cualquier proyecto.
+- Jefe de proyecto: puede exportar solamente proyectos donde sea responsable.
+- Usuario: no puede exportar reportes completos ni informacion financiera.
+
+Controles aplicados:
+
+- El UUID del proyecto se valida con `ParseUUIDPipe`.
+- El proyecto debe existir y no estar eliminado logicamente.
+- El backend calcula semaforo, progreso, dependencias, asignaciones y resumen financiero.
+- El nombre de archivo se normaliza a caracteres seguros e incluye un segmento del UUID.
+- La respuesta configura `Content-Type`, `Content-Disposition` y `Content-Length`.
+- Los archivos se generan en memoria y no se escriben temporales.
+- Los valores de Excel que comienzan con `=`, `+`, `-` o `@` se prefijan con apostrofo para evitar inyeccion de formulas.
+- No se exportan `passwordHash`, tokens ni campos internos sensibles.
+- Las fechas de planificacion `YYYY-MM-DD` se mantienen sin conversion.
+- Los timestamps de generacion se muestran en `America/La_Paz`.
+
+Librerias utilizadas:
+
+| Libreria | Version instalada | Uso | Licencia |
+| --- | --- | --- | --- |
+| `pdfkit` | 0.19.1 | Generacion de PDF en memoria | MIT |
+| `exceljs` | 4.4.0 | Generacion de libros `.xlsx` en memoria | MIT |
+
+No se implementan plantillas complejas, firmas digitales, facturacion, envio por correo ni almacenamiento documental.

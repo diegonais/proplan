@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Res, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -8,6 +8,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -23,6 +24,7 @@ import {
   TrafficLightReportResponseDto,
   WorkloadReportItemResponseDto,
 } from './dto/report-common.dto';
+import { ExportsService, GeneratedExportFile } from './exports.service';
 import { ReportsService } from './reports.service';
 
 @ApiTags('reports')
@@ -33,7 +35,10 @@ import { ReportsService } from './reports.service';
 @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.USER)
 @Controller({ version: '1' })
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly exportsService: ExportsService,
+  ) {}
 
   @Get('reports/dashboard')
   @ApiOperation({ summary: 'Consultar resumen del dashboard filtrado por rol.' })
@@ -97,4 +102,41 @@ export class ReportsController {
   ): Promise<ProjectStatusReportResponseDto> {
     return this.reportsService.getProjectStatus(projectUuid, currentUser);
   }
+
+  @Get('projects/:projectUuid/exports/pdf')
+  @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+  @ApiOperation({ summary: 'Exportar reporte completo del proyecto en PDF.' })
+  @ApiOkResponse({ description: 'Archivo PDF generado en memoria.' })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  async exportProjectPdf(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.exportsService.generateProjectPdf(projectUuid, currentUser);
+
+    sendGeneratedFile(response, file);
+  }
+
+  @Get('projects/:projectUuid/exports/excel')
+  @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+  @ApiOperation({ summary: 'Exportar reporte completo del proyecto en Excel.' })
+  @ApiOkResponse({ description: 'Archivo XLSX generado en memoria.' })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  async exportProjectExcel(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.exportsService.generateProjectExcel(projectUuid, currentUser);
+
+    sendGeneratedFile(response, file);
+  }
+}
+
+function sendGeneratedFile(response: Response, file: GeneratedExportFile): void {
+  response.setHeader('Content-Type', file.contentType);
+  response.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+  response.setHeader('Content-Length', file.buffer.length.toString());
+  response.send(file.buffer);
 }
