@@ -22,6 +22,8 @@ import { formatMoney } from '../../../utils/money';
 import { useAuth } from '../../auth/authContext';
 import { ProjectTeamTab } from '../../team/components/ProjectTeamTab';
 import { ProjectTasksTab } from '../../tasks/components/ProjectTasksTab';
+import { ProjectGanttTab } from '../../reports/components/ProjectGanttTab';
+import { ProjectReportsTab } from '../../reports/components/ProjectReportsTab';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectBudgetTab } from '../components/ProjectBudgetTab';
 import { ProjectStatusChip } from '../components/ProjectStatusChip';
@@ -160,8 +162,10 @@ export function ProjectDetailPage() {
         >
           <Tab label="Resumen" />
           <Tab label="Actividades" />
+          <Tab label="Gantt" />
           <Tab label="Equipo" />
           {canManageProject ? <Tab label="Presupuesto" /> : null}
+          <Tab label="Reportes" />
         </Tabs>
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
           {selectedTab === 0 ? (
@@ -221,9 +225,12 @@ export function ProjectDetailPage() {
             <ProjectTasksTab project={project} canManage={canManageProject} />
           ) : null}
           {selectedTab === 2 ? (
+            <ProjectGanttTab project={project} />
+          ) : null}
+          {selectedTab === 3 ? (
             <ProjectTeamTab project={project} canManage={canManageProject} />
           ) : null}
-          {selectedTab === 3 && canManageProject ? (
+          {selectedTab === 4 && canManageProject ? (
             <ProjectBudgetTab
               project={project}
               canManage={canManageProject}
@@ -231,6 +238,9 @@ export function ProjectDetailPage() {
                 setProject(updatedProject);
               }}
             />
+          ) : null}
+          {selectedTab === (canManageProject ? 5 : 4) ? (
+            <ProjectReportsTab project={project} canViewFinancialDetails={canManageProject} />
           ) : null}
         </Box>
       </Paper>

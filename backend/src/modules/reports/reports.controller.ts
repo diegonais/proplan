@@ -1,0 +1,100 @@
+import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
+import { ProjectFinancialSummaryResponseDto } from '../finances/dto/financial-summary-response.dto';
+import { DashboardReportResponseDto } from './dto/dashboard-report-response.dto';
+import { GanttReportResponseDto } from './dto/gantt-report-response.dto';
+import { ProjectStatusReportResponseDto } from './dto/project-status-report-response.dto';
+import {
+  TrafficLightReportResponseDto,
+  WorkloadReportItemResponseDto,
+} from './dto/report-common.dto';
+import { ReportsService } from './reports.service';
+
+@ApiTags('reports')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token ausente, invalido o vencido.' })
+@ApiForbiddenResponse({ description: 'El usuario autenticado no tiene permiso para el reporte.' })
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.USER)
+@Controller({ version: '1' })
+export class ReportsController {
+  constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('reports/dashboard')
+  @ApiOperation({ summary: 'Consultar resumen del dashboard filtrado por rol.' })
+  @ApiOkResponse({ type: DashboardReportResponseDto })
+  getDashboard(@CurrentUser() currentUser: AuthenticatedUser): Promise<DashboardReportResponseDto> {
+    return this.reportsService.getDashboard(currentUser);
+  }
+
+  @Get('projects/:projectUuid/reports/gantt')
+  @ApiOperation({ summary: 'Consultar datos de Gantt del proyecto.' })
+  @ApiOkResponse({ type: GanttReportResponseDto })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  getProjectGantt(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<GanttReportResponseDto> {
+    return this.reportsService.getProjectGantt(projectUuid, currentUser);
+  }
+
+  @Get('projects/:projectUuid/reports/workload')
+  @ApiOperation({ summary: 'Consultar carga de trabajo por recurso del proyecto.' })
+  @ApiOkResponse({ type: [WorkloadReportItemResponseDto] })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  getProjectWorkload(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<WorkloadReportItemResponseDto[]> {
+    return this.reportsService.getProjectWorkload(projectUuid, currentUser);
+  }
+
+  @Get('projects/:projectUuid/reports/budget')
+  @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+  @ApiOperation({ summary: 'Consultar presupuesto versus costo real del proyecto.' })
+  @ApiOkResponse({ type: ProjectFinancialSummaryResponseDto })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  getProjectBudget(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<ProjectFinancialSummaryResponseDto> {
+    return this.reportsService.getProjectBudget(projectUuid, currentUser);
+  }
+
+  @Get('projects/:projectUuid/reports/traffic-light')
+  @ApiOperation({ summary: 'Consultar semaforo calculado del proyecto con razones.' })
+  @ApiOkResponse({ type: TrafficLightReportResponseDto })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  getProjectTrafficLight(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<TrafficLightReportResponseDto> {
+    return this.reportsService.getProjectTrafficLight(projectUuid, currentUser);
+  }
+
+  @Get('projects/:projectUuid/reports/status')
+  @ApiOperation({ summary: 'Consultar estado general calculado del proyecto.' })
+  @ApiOkResponse({ type: ProjectStatusReportResponseDto })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  getProjectStatus(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<ProjectStatusReportResponseDto> {
+    return this.reportsService.getProjectStatus(projectUuid, currentUser);
+  }
+}
