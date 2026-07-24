@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { EnvironmentVariables, validateEnvironment } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { UsersModule } from './modules/users/users.module';
     HealthModule,
     UsersModule,
     AuthModule,
+    ProjectsModule,
   ],
 })
 export class AppModule {}

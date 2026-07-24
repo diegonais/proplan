@@ -19,6 +19,7 @@ interface CapturedHttpRequest {
   url: string;
   authorizationHeader: string | null;
   body: unknown;
+  params: unknown;
 }
 
 interface MockHttpRoute {
@@ -59,6 +60,7 @@ export function installHttpMock(routes: readonly MockHttpRoute[]): void {
       url,
       authorizationHeader: readAuthorizationHeader(config),
       body,
+      params: config.params,
     });
 
     const response =
