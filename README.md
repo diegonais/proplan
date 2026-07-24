@@ -53,6 +53,29 @@ La API queda disponible en `http://localhost:3000/api/v1/health`.
 
 Swagger queda disponible en `http://localhost:3000/api/docs`.
 
+### Usuario inicial de desarrollo
+
+Para crear el primer Administrador de forma idempotente en desarrollo, configurar en `.env`:
+
+```bash
+INITIAL_ADMIN_EMAIL=admin@proplan.local
+INITIAL_ADMIN_NAME=Administrador PROPLAN
+INITIAL_ADMIN_PASSWORD=change_me_for_local_development
+```
+
+Luego ejecutar:
+
+```bash
+cd backend
+npm run seed:initial-admin
+```
+
+El seed no duplica el usuario si el email ya existe y no debe ejecutarse en produccion.
+
+### Cierre de sesion
+
+Esta fase usa JWT sin persistencia de sesiones ni refresh tokens. Por ello, el cierre de sesion consiste en eliminar el token almacenado por el cliente de forma segura.
+
 ## Frontend
 
 ```bash

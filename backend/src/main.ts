@@ -40,6 +40,7 @@ async function bootstrap(): Promise<void> {
     .setTitle('PROPLAN API')
     .setDescription('Technical API documentation for PROPLAN.')
     .setVersion(apiVersion)
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
