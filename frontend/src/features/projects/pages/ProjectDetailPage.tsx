@@ -3,11 +3,14 @@ import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import {
   Alert,
+  Box,
   Button,
   CircularProgress,
   Divider,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
@@ -16,6 +19,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import { useAuth } from '../../auth/authContext';
+import { ProjectTasksTab } from '../../tasks/components/ProjectTasksTab';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectStatusChip } from '../components/ProjectStatusChip';
 import { deleteProject, getProject } from '../services/projectsApi';
@@ -31,8 +35,12 @@ export function ProjectDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedTab, setSelectedTab] = useState(0);
 
-  const canManageProjects = user?.role === 'ADMIN' || user?.role === 'PROJECT_MANAGER';
+  const canManageProject =
+    project !== null &&
+    (user?.role === 'ADMIN' ||
+      (user?.role === 'PROJECT_MANAGER' && project.managerUuid === user.uuid));
 
   useEffect(() => {
     if (uuid === undefined) {
@@ -118,7 +126,7 @@ export function ProjectDetailPage() {
           <Button component={Link} to="/projects" startIcon={<ArrowBackOutlinedIcon />}>
             Volver
           </Button>
-          {canManageProjects ? (
+          {canManageProject ? (
             <>
               <Button component={Link} to={`/projects/${project.uuid}/edit`} startIcon={<EditOutlinedIcon />}>
                 Editar
@@ -138,58 +146,75 @@ export function ProjectDetailPage() {
         </Stack>
       </Stack>
 
-      <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', p: { xs: 2, sm: 3 } }}>
-        <Stack spacing={2.5}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
-            <Stack spacing={0.5}>
-              <Typography variant="body2" color="text.secondary">
-                Estado
-              </Typography>
-              <ProjectStatusChip status={project.status} />
-            </Stack>
-            <Stack spacing={0.5}>
-              <Typography variant="body2" color="text.secondary">
-                Jefe de proyecto
-              </Typography>
-              <Typography>{project.manager.name}</Typography>
-            </Stack>
-            <Stack spacing={0.5}>
-              <Typography variant="body2" color="text.secondary">
-                Presupuesto aprobado
-              </Typography>
-              <Typography>{formatMoney(project.approvedBudget)}</Typography>
-            </Stack>
-          </Stack>
-
-          <Divider />
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
-            <Stack spacing={0.5}>
-              <Typography variant="body2" color="text.secondary">
-                Fecha de inicio
-              </Typography>
-              <Typography>{project.startDate}</Typography>
-            </Stack>
-            <Stack spacing={0.5}>
-              <Typography variant="body2" color="text.secondary">
-                Fecha de fin
-              </Typography>
-              <Typography>{project.endDate}</Typography>
-            </Stack>
-          </Stack>
-
-          {project.description !== null ? (
-            <>
-              <Divider />
-              <Stack spacing={0.5}>
-                <Typography variant="body2" color="text.secondary">
-                  Descripcion
-                </Typography>
-                <Typography>{project.description}</Typography>
+      <Paper elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+        <Tabs
+          value={selectedTab}
+          onChange={(_event, nextValue: number) => {
+            setSelectedTab(nextValue);
+          }}
+          aria-label="Secciones del proyecto"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label="Resumen" />
+          <Tab label="Actividades" />
+        </Tabs>
+        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+          {selectedTab === 0 ? (
+            <Stack spacing={2.5}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Estado
+                  </Typography>
+                  <ProjectStatusChip status={project.status} />
+                </Stack>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Jefe de proyecto
+                  </Typography>
+                  <Typography>{project.manager.name}</Typography>
+                </Stack>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Presupuesto aprobado
+                  </Typography>
+                  <Typography>{formatMoney(project.approvedBudget)}</Typography>
+                </Stack>
               </Stack>
-            </>
-          ) : null}
-        </Stack>
+
+              <Divider />
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Fecha de inicio
+                  </Typography>
+                  <Typography>{project.startDate}</Typography>
+                </Stack>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Fecha de fin
+                  </Typography>
+                  <Typography>{project.endDate}</Typography>
+                </Stack>
+              </Stack>
+
+              {project.description !== null ? (
+                <>
+                  <Divider />
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" color="text.secondary">
+                      Descripcion
+                    </Typography>
+                    <Typography>{project.description}</Typography>
+                  </Stack>
+                </>
+              ) : null}
+            </Stack>
+          ) : (
+            <ProjectTasksTab project={project} canManage={canManageProject} />
+          )}
+        </Box>
       </Paper>
 
       <DeleteProjectDialog

@@ -7,6 +7,8 @@ import { EnvironmentVariables, validateEnvironment } from './config/env.validati
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { TaskDependenciesModule } from './modules/task-dependencies/task-dependencies.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -37,6 +39,8 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     AuthModule,
     ProjectsModule,
+    TasksModule,
+    TaskDependenciesModule,
   ],
 })
 export class AppModule {}
