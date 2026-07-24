@@ -12,8 +12,8 @@ export interface Task {
   status: TaskStatus;
   progress: number;
   estimatedHours: string;
-  plannedBudget: string;
-  actualCost: string;
+  plannedBudget: string | null;
+  actualCost: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,8 +26,8 @@ export interface TaskPayload {
   status: TaskStatus;
   progress: number;
   estimatedHours: number;
-  plannedBudget: number;
-  actualCost: number;
+  plannedBudget: string;
+  actualCost: string;
   parentTaskUuid?: string | null;
 }
 

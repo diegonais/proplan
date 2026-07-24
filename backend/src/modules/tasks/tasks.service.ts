@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
+import { normalizeMoney } from '../../common/utils/decimal-money';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
@@ -72,8 +73,8 @@ export class TasksService {
         status: createTaskDto.status ?? TaskStatus.PENDING,
         progress: createTaskDto.progress ?? 0,
         estimatedHours: formatDecimal(createTaskDto.estimatedHours ?? 0),
-        plannedBudget: formatDecimal(createTaskDto.plannedBudget ?? 0),
-        actualCost: formatDecimal(createTaskDto.actualCost ?? 0),
+        plannedBudget: normalizeMoney(createTaskDto.plannedBudget ?? '0.00'),
+        actualCost: normalizeMoney(createTaskDto.actualCost ?? '0.00'),
       }),
     );
 
@@ -94,7 +95,9 @@ export class TasksService {
         ? await this.filterAssignedTasks(tasks, currentUser.uuid)
         : tasks;
 
-    return visibleTasks.map((task) => TaskResponseDto.fromEntity(task));
+    return visibleTasks.map((task) =>
+      TaskResponseDto.fromEntity(task, this.canViewFinancials(project, currentUser)),
+    );
   }
 
   async findOne(uuid: string, currentUser: AuthenticatedUser): Promise<TaskResponseDto> {
@@ -102,7 +105,7 @@ export class TasksService {
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     await this.ensureCanAccessTask(task, project, currentUser);
 
-    return TaskResponseDto.fromEntity(task);
+    return TaskResponseDto.fromEntity(task, this.canViewFinancials(project, currentUser));
   }
 
   async update(
@@ -172,11 +175,11 @@ export class TasksService {
     }
 
     if (updateTaskDto.plannedBudget !== undefined) {
-      task.plannedBudget = formatDecimal(updateTaskDto.plannedBudget);
+      task.plannedBudget = normalizeMoney(updateTaskDto.plannedBudget);
     }
 
     if (updateTaskDto.actualCost !== undefined) {
-      task.actualCost = formatDecimal(updateTaskDto.actualCost);
+      task.actualCost = normalizeMoney(updateTaskDto.actualCost);
     }
 
     if (updateTaskDto.parentTaskUuid !== undefined) {
@@ -185,7 +188,7 @@ export class TasksService {
 
     const savedTask = await this.tasksRepository.save(task);
 
-    return TaskResponseDto.fromEntity(savedTask);
+    return TaskResponseDto.fromEntity(savedTask, true);
   }
 
   async updateOwnProgress(
@@ -212,7 +215,7 @@ export class TasksService {
 
     const savedTask = await this.tasksRepository.save(task);
 
-    return TaskResponseDto.fromEntity(savedTask);
+    return TaskResponseDto.fromEntity(savedTask, false);
   }
 
   async remove(uuid: string, currentUser: AuthenticatedUser): Promise<void> {
@@ -320,6 +323,13 @@ export class TasksService {
     }
 
     throw new ForbiddenException('No tiene permiso para administrar actividades de este proyecto.');
+  }
+
+  private canViewFinancials(project: Project, currentUser: AuthenticatedUser): boolean {
+    return (
+      currentUser.role === UserRole.ADMIN ||
+      (currentUser.role === UserRole.PROJECT_MANAGER && project.managerUuid === currentUser.uuid)
+    );
   }
 
   private async isProjectMember(projectUuid: string, userUuid: string): Promise<boolean> {

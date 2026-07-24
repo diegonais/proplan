@@ -14,6 +14,10 @@ import {
 } from 'class-validator';
 
 import { TaskStatus } from '../../../common/enums/task-status.enum';
+import {
+  normalizeMoneyInput,
+  normalizedDecimalMoneyPattern,
+} from '../../../common/utils/decimal-money';
 
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -61,19 +65,33 @@ export class CreateTaskDto {
   @Min(0)
   estimatedHours?: number;
 
-  @ApiPropertyOptional({ example: 1500, minimum: 0, default: 0 })
+  @ApiPropertyOptional({
+    example: '1500.00',
+    minimum: 0,
+    default: '0.00',
+    description: 'Monto decimal no negativo. La API serializa valores monetarios como strings.',
+  })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => normalizeNumberInput(value))
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  plannedBudget?: number;
+  @Transform(({ value }: { value: unknown }) => normalizeMoneyInput(value))
+  @IsString()
+  @Matches(normalizedDecimalMoneyPattern, {
+    message: 'plannedBudget debe ser un decimal no negativo con maximo 2 decimales.',
+  })
+  plannedBudget?: string;
 
-  @ApiPropertyOptional({ example: 0, minimum: 0, default: 0 })
+  @ApiPropertyOptional({
+    example: '0.00',
+    minimum: 0,
+    default: '0.00',
+    description: 'Monto decimal no negativo. La API serializa valores monetarios como strings.',
+  })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => normalizeNumberInput(value))
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  actualCost?: number;
+  @Transform(({ value }: { value: unknown }) => normalizeMoneyInput(value))
+  @IsString()
+  @Matches(normalizedDecimalMoneyPattern, {
+    message: 'actualCost debe ser un decimal no negativo con maximo 2 decimales.',
+  })
+  actualCost?: string;
 
   @ApiPropertyOptional({
     example: '0bdcfd5c-2ac3-43da-9bb6-28e8e8126eb1',

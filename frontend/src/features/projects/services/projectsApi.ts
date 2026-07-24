@@ -4,6 +4,7 @@ import {
   ManagerOption,
   PaginatedProjectsResponse,
   Project,
+  ProjectFinancialSummary,
   ProjectPayload,
   ProjectsListParams,
 } from '../types';
@@ -40,6 +41,18 @@ export async function updateProject(uuid: string, payload: ProjectPayload): Prom
 
 export async function deleteProject(uuid: string): Promise<void> {
   await httpClient.delete(`/projects/${uuid}`);
+}
+
+export async function getProjectFinancialSummary(uuid: string): Promise<ProjectFinancialSummary> {
+  const response = await httpClient.get<ProjectFinancialSummary>(`/projects/${uuid}/financial-summary`);
+
+  return response.data;
+}
+
+export async function updateProjectBudget(uuid: string, approvedBudget: string): Promise<Project> {
+  const response = await httpClient.patch<Project>(`/projects/${uuid}/budget`, { approvedBudget });
+
+  return response.data;
 }
 
 export async function listActiveProjectManagers(): Promise<ManagerOption[]> {

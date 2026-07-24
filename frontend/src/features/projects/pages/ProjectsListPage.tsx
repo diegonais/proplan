@@ -27,6 +27,7 @@ import { Link } from 'react-router-dom';
 
 import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
+import { formatMoney } from '../../../utils/money';
 import { useAuth } from '../../auth/authContext';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectStatusChip } from '../components/ProjectStatusChip';
@@ -335,11 +336,4 @@ export function ProjectsListPage() {
       />
     </Stack>
   );
-}
-
-function formatMoney(value: string): string {
-  return new Intl.NumberFormat('es-BO', {
-    style: 'currency',
-    currency: 'BOB',
-  }).format(Number(value));
 }

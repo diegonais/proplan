@@ -1,4 +1,5 @@
 import { UserRole } from '../auth/types';
+import { TaskStatus } from '../tasks/types';
 
 export type ProjectStatus = 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
@@ -17,7 +18,7 @@ export interface Project {
   startDate: string;
   endDate: string;
   status: ProjectStatus;
-  approvedBudget: string;
+  approvedBudget: string | null;
   managerUuid: string;
   manager: ProjectManager;
   createdAt: string;
@@ -42,7 +43,7 @@ export interface ProjectPayload {
   startDate: string;
   endDate: string;
   status: ProjectStatus;
-  approvedBudget: number;
+  approvedBudget: string;
   managerUuid?: string;
 }
 
@@ -71,6 +72,30 @@ export interface ManagerOption {
   name: string;
   email: string;
   role: UserRole;
+}
+
+export interface ProjectFinancialTaskSummary {
+  uuid: string;
+  name: string;
+  status: TaskStatus;
+  plannedBudget: string;
+  actualCost: string;
+  variance: string;
+  consumedPercentage: string | null;
+}
+
+export interface ProjectFinancialSummary {
+  projectUuid: string;
+  approvedBudget: string;
+  distributedBudget: string;
+  totalActualCost: string;
+  balance: string;
+  variance: string;
+  consumedPercentage: string | null;
+  distributedBudgetDifference: string;
+  budgetExceeded: boolean;
+  operationalBudgetPolicy: string;
+  tasks: ProjectFinancialTaskSummary[];
 }
 
 export const projectStatuses: readonly ProjectStatus[] = [

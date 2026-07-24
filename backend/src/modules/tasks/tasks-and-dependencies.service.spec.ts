@@ -184,7 +184,7 @@ describe('Tasks and task dependencies rules', () => {
       uuid: task.uuid,
       status: TaskStatus.IN_PROGRESS,
       progress: 45,
-      plannedBudget: '0.00',
+      plannedBudget: null,
       startDate: '2026-08-05',
     });
   });
@@ -363,8 +363,8 @@ function createTaskInput(overrides: Partial<Parameters<TasksService['create']>[1
     status: TaskStatus.PENDING,
     progress: 0,
     estimatedHours: 8,
-    plannedBudget: 100,
-    actualCost: 0,
+    plannedBudget: '100.00',
+    actualCost: '0.00',
     ...overrides,
   };
 }

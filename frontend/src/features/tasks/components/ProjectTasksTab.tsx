@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
+import { formatMoney } from '../../../utils/money';
 import { Project } from '../../projects/types';
 import {
   createTask,
@@ -437,13 +438,6 @@ function flattenTasks(tasks: readonly Task[]): FlattenedTask[] {
   });
 
   return flattenedTasks;
-}
-
-function formatMoney(value: string): string {
-  return new Intl.NumberFormat('es-BO', {
-    style: 'currency',
-    currency: 'BOB',
-  }).format(Number(value));
 }
 
 function formatNumber(value: string): string {

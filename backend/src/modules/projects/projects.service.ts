@@ -10,6 +10,7 @@ import { Brackets, DataSource, Repository } from 'typeorm';
 import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
+import { normalizeMoney } from '../../common/utils/decimal-money';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -61,7 +62,7 @@ export class ProjectsService {
           startDate: createProjectDto.startDate,
           endDate: createProjectDto.endDate,
           status: createProjectDto.status ?? ProjectStatus.PLANNING,
-          approvedBudget: formatMoney(createProjectDto.approvedBudget ?? 0),
+          approvedBudget: normalizeMoney(createProjectDto.approvedBudget ?? '0.00'),
           managerUuid,
         }),
       );
@@ -83,6 +84,10 @@ export class ProjectsService {
   ): Promise<PaginatedProjectsResponseDto> {
     if (query.managerUuid !== undefined && currentUser.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Solamente el Administrador puede filtrar por jefe de proyecto.');
+    }
+
+    if (query.orderBy === ProjectSortField.APPROVED_BUDGET && currentUser.role === UserRole.USER) {
+      throw new ForbiddenException('El rol Usuario no puede ordenar por informacion financiera.');
     }
 
     const page = query.page;
@@ -128,7 +133,9 @@ export class ProjectsService {
       .getManyAndCount();
 
     return {
-      data: projects.map((project) => ProjectResponseDto.fromEntity(project)),
+      data: projects.map((project) =>
+        ProjectResponseDto.fromEntity(project, this.canViewFinancials(project, currentUser)),
+      ),
       meta: {
         page,
         limit,
@@ -142,7 +149,7 @@ export class ProjectsService {
     const project = await this.findActiveProjectOrFail(uuid);
     await this.ensureCanAccess(project, currentUser);
 
-    return ProjectResponseDto.fromEntity(project);
+    return ProjectResponseDto.fromEntity(project, this.canViewFinancials(project, currentUser));
   }
 
   async update(
@@ -191,7 +198,7 @@ export class ProjectsService {
     }
 
     if (updateProjectDto.approvedBudget !== undefined) {
-      project.approvedBudget = formatMoney(updateProjectDto.approvedBudget);
+      project.approvedBudget = normalizeMoney(updateProjectDto.approvedBudget);
     }
 
     const savedProject = await this.dataSource.transaction(async (entityManager) => {
@@ -209,7 +216,10 @@ export class ProjectsService {
     });
     const reloadedProject = await this.findActiveProjectOrFail(savedProject.uuid);
 
-    return ProjectResponseDto.fromEntity(reloadedProject);
+    return ProjectResponseDto.fromEntity(
+      reloadedProject,
+      this.canViewFinancials(reloadedProject, currentUser),
+    );
   }
 
   async remove(uuid: string, currentUser: AuthenticatedUser): Promise<void> {
@@ -291,6 +301,13 @@ export class ProjectsService {
     throw new ForbiddenException('No tiene permiso para administrar este proyecto.');
   }
 
+  private canViewFinancials(project: Project, currentUser: AuthenticatedUser): boolean {
+    return (
+      currentUser.role === UserRole.ADMIN ||
+      (currentUser.role === UserRole.PROJECT_MANAGER && project.managerUuid === currentUser.uuid)
+    );
+  }
+
   private async isProjectMember(projectUuid: string, userUuid: string): Promise<boolean> {
     const membershipCount = await this.projectMembersRepository.count({
       where: { projectUuid, userUuid },
@@ -345,10 +362,6 @@ function resolveSortColumn(sortField: ProjectSortField): string {
   };
 
   return sortColumns[sortField];
-}
-
-function formatMoney(value: number): string {
-  return value.toFixed(2);
 }
 
 function isValidDateOnly(value: string): boolean {

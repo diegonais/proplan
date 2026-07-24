@@ -18,10 +18,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
+import { formatMoney } from '../../../utils/money';
 import { useAuth } from '../../auth/authContext';
 import { ProjectTeamTab } from '../../team/components/ProjectTeamTab';
 import { ProjectTasksTab } from '../../tasks/components/ProjectTasksTab';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
+import { ProjectBudgetTab } from '../components/ProjectBudgetTab';
 import { ProjectStatusChip } from '../components/ProjectStatusChip';
 import { deleteProject, getProject } from '../services/projectsApi';
 import { Project } from '../types';
@@ -159,6 +161,7 @@ export function ProjectDetailPage() {
           <Tab label="Resumen" />
           <Tab label="Actividades" />
           <Tab label="Equipo" />
+          {canManageProject ? <Tab label="Presupuesto" /> : null}
         </Tabs>
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
           {selectedTab === 0 ? (
@@ -220,6 +223,15 @@ export function ProjectDetailPage() {
           {selectedTab === 2 ? (
             <ProjectTeamTab project={project} canManage={canManageProject} />
           ) : null}
+          {selectedTab === 3 && canManageProject ? (
+            <ProjectBudgetTab
+              project={project}
+              canManage={canManageProject}
+              onProjectUpdated={(updatedProject) => {
+                setProject(updatedProject);
+              }}
+            />
+          ) : null}
         </Box>
       </Paper>
 
@@ -236,11 +248,4 @@ export function ProjectDetailPage() {
       />
     </Stack>
   );
-}
-
-function formatMoney(value: string): string {
-  return new Intl.NumberFormat('es-BO', {
-    style: 'currency',
-    currency: 'BOB',
-  }).format(Number(value));
 }

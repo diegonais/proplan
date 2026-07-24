@@ -34,11 +34,21 @@ export class TaskResponseDto {
   @ApiProperty({ example: '24.00' })
   estimatedHours!: string;
 
-  @ApiProperty({ example: '1500.00' })
-  plannedBudget!: string;
+  @ApiProperty({
+    example: '1500.00',
+    nullable: true,
+    description:
+      'String decimal cuando el usuario puede ver informacion financiera; null para roles no autorizados.',
+  })
+  plannedBudget!: string | null;
 
-  @ApiProperty({ example: '0.00' })
-  actualCost!: string;
+  @ApiProperty({
+    example: '0.00',
+    nullable: true,
+    description:
+      'String decimal cuando el usuario puede ver informacion financiera; null para roles no autorizados.',
+  })
+  actualCost!: string | null;
 
   @ApiProperty({ example: '2026-07-24T18:30:00.000Z' })
   createdAt!: string;
@@ -46,7 +56,7 @@ export class TaskResponseDto {
   @ApiProperty({ example: '2026-07-24T18:30:00.000Z' })
   updatedAt!: string;
 
-  static fromEntity(task: Task): TaskResponseDto {
+  static fromEntity(task: Task, includeFinancials = true): TaskResponseDto {
     return {
       uuid: task.uuid,
       projectUuid: task.projectUuid,
@@ -58,8 +68,8 @@ export class TaskResponseDto {
       status: task.status,
       progress: task.progress,
       estimatedHours: task.estimatedHours,
-      plannedBudget: task.plannedBudget,
-      actualCost: task.actualCost,
+      plannedBudget: includeFinancials ? task.plannedBudget : null,
+      actualCost: includeFinancials ? task.actualCost : null,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
     };

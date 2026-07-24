@@ -61,7 +61,7 @@ describe('ProjectsService', () => {
 
   it('allows administrators to create projects with an active manager', async () => {
     const project = await service.create(
-      createProjectInput({ managerUuid: managerUser.uuid, approvedBudget: 1200 }),
+      createProjectInput({ managerUuid: managerUser.uuid, approvedBudget: '1200.00' }),
       adminUser,
     );
 
@@ -241,7 +241,7 @@ function createProjectInput(overrides: Partial<Parameters<ProjectsService['creat
     startDate: '2026-08-01',
     endDate: '2026-12-15',
     status: ProjectStatus.PLANNING,
-    approvedBudget: 0,
+    approvedBudget: '0.00',
     ...overrides,
   };
 }

@@ -1,0 +1,136 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Not, Repository } from 'typeorm';
+
+import { TaskStatus } from '../../common/enums/task-status.enum';
+import { UserRole } from '../../common/enums/user-role.enum';
+import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
+import { normalizeMoney } from '../../common/utils/decimal-money';
+import { ProjectResponseDto } from '../projects/dto/project-response.dto';
+import { Project } from '../projects/entities/project.entity';
+import { TaskResponseDto } from '../tasks/dto/task-response.dto';
+import { Task } from '../tasks/entities/task.entity';
+import { ProjectFinancialSummaryResponseDto } from './dto/financial-summary-response.dto';
+import { UpdateProjectBudgetDto } from './dto/update-project-budget.dto';
+import { UpdateTaskFinancialsDto } from './dto/update-task-financials.dto';
+
+@Injectable()
+export class FinancesService {
+  constructor(
+    @InjectRepository(Project)
+    private readonly projectsRepository: Repository<Project>,
+    @InjectRepository(Task)
+    private readonly tasksRepository: Repository<Task>,
+  ) {}
+
+  async getProjectFinancialSummary(
+    projectUuid: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<ProjectFinancialSummaryResponseDto> {
+    const project = await this.findActiveProjectOrFail(projectUuid);
+    this.ensureCanViewFinancials(project, currentUser);
+
+    const tasks = await this.tasksRepository.find({
+      where: {
+        projectUuid: project.uuid,
+        status: Not(TaskStatus.CANCELLED),
+      },
+      order: {
+        startDate: 'ASC',
+        endDate: 'ASC',
+        name: 'ASC',
+      },
+    });
+
+    return ProjectFinancialSummaryResponseDto.fromEntities(project, tasks);
+  }
+
+  async updateProjectBudget(
+    projectUuid: string,
+    updateProjectBudgetDto: UpdateProjectBudgetDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<ProjectResponseDto> {
+    const project = await this.findActiveProjectOrFail(projectUuid);
+    this.ensureCanManageFinancials(project, currentUser);
+
+    project.approvedBudget = normalizeMoney(updateProjectBudgetDto.approvedBudget);
+    const savedProject = await this.projectsRepository.save(project);
+    const reloadedProject = await this.findActiveProjectOrFail(savedProject.uuid);
+
+    return ProjectResponseDto.fromEntity(reloadedProject, true);
+  }
+
+  async updateTaskFinancials(
+    taskUuid: string,
+    updateTaskFinancialsDto: UpdateTaskFinancialsDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<TaskResponseDto> {
+    if (
+      updateTaskFinancialsDto.plannedBudget === undefined &&
+      updateTaskFinancialsDto.actualCost === undefined
+    ) {
+      throw new BadRequestException('Debe enviar plannedBudget, actualCost o ambos.');
+    }
+
+    const task = await this.findActiveTaskOrFail(taskUuid);
+    const project = await this.findActiveProjectOrFail(task.projectUuid);
+    this.ensureCanManageFinancials(project, currentUser);
+
+    if (updateTaskFinancialsDto.plannedBudget !== undefined) {
+      task.plannedBudget = normalizeMoney(updateTaskFinancialsDto.plannedBudget);
+    }
+
+    if (updateTaskFinancialsDto.actualCost !== undefined) {
+      task.actualCost = normalizeMoney(updateTaskFinancialsDto.actualCost);
+    }
+
+    const savedTask = await this.tasksRepository.save(task);
+
+    return TaskResponseDto.fromEntity(savedTask);
+  }
+
+  private async findActiveProjectOrFail(uuid: string): Promise<Project> {
+    const project = await this.projectsRepository.findOne({
+      where: { uuid },
+      relations: { manager: true },
+    });
+
+    if (project === null) {
+      throw new NotFoundException('Proyecto no encontrado.');
+    }
+
+    return project;
+  }
+
+  private async findActiveTaskOrFail(uuid: string): Promise<Task> {
+    const task = await this.tasksRepository.findOne({ where: { uuid } });
+
+    if (task === null) {
+      throw new NotFoundException('Actividad no encontrada.');
+    }
+
+    return task;
+  }
+
+  private ensureCanViewFinancials(project: Project, currentUser: AuthenticatedUser): void {
+    if (currentUser.role === UserRole.ADMIN) {
+      return;
+    }
+
+    if (currentUser.role === UserRole.PROJECT_MANAGER && project.managerUuid === currentUser.uuid) {
+      return;
+    }
+
+    throw new ForbiddenException('No tiene permiso para consultar informacion financiera del proyecto.');
+  }
+
+  private ensureCanManageFinancials(project: Project, currentUser: AuthenticatedUser): void {
+    this.ensureCanViewFinancials(project, currentUser);
+  }
+
+}

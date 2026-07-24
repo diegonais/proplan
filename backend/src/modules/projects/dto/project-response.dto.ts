@@ -50,8 +50,13 @@ export class ProjectResponseDto {
   @ApiProperty({ enum: ProjectStatus, example: ProjectStatus.PLANNING })
   status!: ProjectStatus;
 
-  @ApiProperty({ example: '15000.00' })
-  approvedBudget!: string;
+  @ApiProperty({
+    example: '15000.00',
+    nullable: true,
+    description:
+      'String decimal cuando el usuario puede ver informacion financiera; null para roles no autorizados.',
+  })
+  approvedBudget!: string | null;
 
   @ApiProperty({ example: '6f1fbb9d-5cc8-4b20-a1b5-fb5d42f3a541' })
   managerUuid!: string;
@@ -65,7 +70,7 @@ export class ProjectResponseDto {
   @ApiProperty({ example: '2026-07-24T18:30:00.000Z' })
   updatedAt!: string;
 
-  static fromEntity(project: Project): ProjectResponseDto {
+  static fromEntity(project: Project, includeFinancials = true): ProjectResponseDto {
     return {
       uuid: project.uuid,
       name: project.name,
@@ -74,7 +79,7 @@ export class ProjectResponseDto {
       startDate: project.startDate,
       endDate: project.endDate,
       status: project.status,
-      approvedBudget: project.approvedBudget,
+      approvedBudget: includeFinancials ? project.approvedBudget : null,
       managerUuid: project.managerUuid,
       manager: ProjectManagerResponseDto.fromEntity(project.manager),
       createdAt: project.createdAt.toISOString(),

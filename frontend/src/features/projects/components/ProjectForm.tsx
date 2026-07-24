@@ -3,6 +3,7 @@ import { Alert, Button, MenuItem, Paper, Stack, TextField } from '@mui/material'
 import { SyntheticEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { isValidMoneyInput, normalizeMoneyInput } from '../../../utils/money';
 import {
   ManagerOption,
   Project,
@@ -57,7 +58,7 @@ export function ProjectForm({
             startDate: project.startDate,
             endDate: project.endDate,
             status: project.status,
-            approvedBudget: project.approvedBudget,
+            approvedBudget: project.approvedBudget ?? '0.00',
             managerUuid: project.managerUuid,
           },
     [project],
@@ -90,7 +91,7 @@ export function ProjectForm({
       startDate: values.startDate,
       endDate: values.endDate,
       status: values.status,
-      approvedBudget: Number(values.approvedBudget),
+      approvedBudget: normalizeMoneyInput(values.approvedBudget),
       ...(isAdmin ? { managerUuid: values.managerUuid } : {}),
     });
   };
@@ -267,10 +268,8 @@ function validateProjectForm(values: ProjectFormValues, isAdmin: boolean): Proje
     errors.endDate = 'La fecha de fin no puede ser anterior a la fecha de inicio.';
   }
 
-  if (values.approvedBudget.length === 0 || Number.isNaN(Number(values.approvedBudget))) {
-    errors.approvedBudget = 'Ingrese un presupuesto valido.';
-  } else if (Number(values.approvedBudget) < 0) {
-    errors.approvedBudget = 'El presupuesto aprobado no puede ser negativo.';
+  if (!isValidMoneyInput(values.approvedBudget)) {
+    errors.approvedBudget = 'Ingrese un presupuesto valido con maximo 2 decimales.';
   }
 
   if (isAdmin && values.managerUuid.length === 0) {

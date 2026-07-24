@@ -26,6 +26,20 @@ export async function updateTask(taskUuid: string, payload: TaskPayload): Promis
   return response.data;
 }
 
+export interface TaskFinancialsPayload {
+  plannedBudget?: string;
+  actualCost?: string;
+}
+
+export async function updateTaskFinancials(
+  taskUuid: string,
+  payload: TaskFinancialsPayload,
+): Promise<Task> {
+  const response = await httpClient.patch<Task>(`/tasks/${taskUuid}/financials`, payload);
+
+  return response.data;
+}
+
 export async function updateOwnTaskProgress(
   taskUuid: string,
   payload: TaskProgressPayload,

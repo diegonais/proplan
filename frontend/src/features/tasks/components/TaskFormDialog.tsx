@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { SyntheticEvent, useEffect, useMemo, useState } from 'react';
 
+import { isValidMoneyInput, normalizeMoneyInput } from '../../../utils/money';
 import {
   Task,
   TaskFormValues,
@@ -68,8 +69,8 @@ export function TaskFormDialog({
         status: task.status,
         progress: String(task.progress),
         estimatedHours: task.estimatedHours,
-        plannedBudget: task.plannedBudget,
-        actualCost: task.actualCost,
+        plannedBudget: task.plannedBudget ?? '0.00',
+        actualCost: task.actualCost ?? '0.00',
         parentTaskUuid: task.parentTaskUuid ?? '',
       };
     }
@@ -121,8 +122,8 @@ export function TaskFormDialog({
       status: values.status,
       progress: Number(values.progress),
       estimatedHours: Number(values.estimatedHours),
-      plannedBudget: Number(values.plannedBudget),
-      actualCost: Number(values.actualCost),
+      plannedBudget: normalizeMoneyInput(values.plannedBudget),
+      actualCost: normalizeMoneyInput(values.actualCost),
       parentTaskUuid: values.parentTaskUuid.length > 0 ? values.parentTaskUuid : null,
     });
   };
@@ -306,8 +307,8 @@ function validateTaskForm(values: TaskFormValues): TaskFormErrors {
   }
 
   validateNonNegativeNumber(values.estimatedHours, 'estimatedHours', errors);
-  validateNonNegativeNumber(values.plannedBudget, 'plannedBudget', errors);
-  validateNonNegativeNumber(values.actualCost, 'actualCost', errors);
+  validateMoneyField(values.plannedBudget, 'plannedBudget', errors);
+  validateMoneyField(values.actualCost, 'actualCost', errors);
 
   if (values.progress.length === 0 || Number.isNaN(Number(values.progress))) {
     errors.progress = 'Ingrese un progreso valido.';
@@ -324,7 +325,7 @@ function validateTaskForm(values: TaskFormValues): TaskFormErrors {
 
 function validateNonNegativeNumber(
   value: string,
-  field: 'estimatedHours' | 'plannedBudget' | 'actualCost',
+  field: 'estimatedHours',
   errors: TaskFormErrors,
 ): void {
   if (value.length === 0 || Number.isNaN(Number(value))) {
@@ -334,6 +335,16 @@ function validateNonNegativeNumber(
 
   if (Number(value) < 0) {
     errors[field] = 'El valor no puede ser negativo.';
+  }
+}
+
+function validateMoneyField(
+  value: string,
+  field: 'plannedBudget' | 'actualCost',
+  errors: TaskFormErrors,
+): void {
+  if (!isValidMoneyInput(value)) {
+    errors[field] = 'Ingrese un monto valido con maximo 2 decimales.';
   }
 }
 
