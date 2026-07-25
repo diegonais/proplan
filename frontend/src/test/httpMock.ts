@@ -7,6 +7,7 @@ type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 interface MockHttpResponse {
   status: number;
   data: unknown;
+  headers?: Record<string, string>;
 }
 
 interface MockHttpRequest {
@@ -120,7 +121,7 @@ function createAxiosResponse(
     data: mockResponse.data,
     status: mockResponse.status,
     statusText: mockResponse.status >= 400 ? 'Error' : 'OK',
-    headers: {},
+    headers: mockResponse.headers ?? {},
     config,
   };
 

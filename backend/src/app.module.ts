@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'node:path';
 
@@ -39,6 +41,20 @@ import { UsersModule } from './modules/users/users.module';
         migrations: [join(__dirname, 'database', 'migrations', '*{.ts,.js}')],
       }),
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<EnvironmentVariables, true>) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: configService.getOrThrow('THROTTLE_TTL_SECONDS', { infer: true }) * 1000,
+            limit: configService.getOrThrow('THROTTLE_LIMIT', { infer: true }),
+          },
+        ],
+        errorMessage: 'Demasiadas solicitudes. Intente nuevamente mas tarde.',
+      }),
+    }),
     HealthModule,
     UsersModule,
     AuthModule,
@@ -49,6 +65,12 @@ import { UsersModule } from './modules/users/users.module';
     TaskDependenciesModule,
     FinancesModule,
     ReportsModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

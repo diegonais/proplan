@@ -1,0 +1,78 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: proplan_test
+          POSTGRES_USER: proplan_test
+          POSTGRES_PASSWORD: proplan_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proplan_test -d proplan_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      APP_PORT: 3000
+      API_PREFIX: api
+      API_VERSION: 1
+      TIME_ZONE: America/La_Paz
+      CORS_ORIGINS: http://localhost:5173
+      JWT_SECRET: ci_test_secret_with_more_than_32_characters
+      JWT_EXPIRES_IN: 1h
+      BCRYPT_SALT_ROUNDS: 10
+      THROTTLE_TTL_SECONDS: 60
+      THROTTLE_LIMIT: 120
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: proplan_test
+      DB_USERNAME: proplan_test
+      DB_PASSWORD: proplan_test_password
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test with coverage
+        run: npm test -- --coverage --runInBand
+
+      - name: Build
+        run: npm run build
+
+      - name: Validate migrations
+        run: npm run migration:run

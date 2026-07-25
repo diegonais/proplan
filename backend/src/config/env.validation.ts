@@ -10,6 +10,8 @@ export interface EnvironmentVariables {
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
   BCRYPT_SALT_ROUNDS: number;
+  THROTTLE_TTL_SECONDS: number;
+  THROTTLE_LIMIT: number;
   INITIAL_ADMIN_EMAIL?: string;
   INITIAL_ADMIN_NAME?: string;
   INITIAL_ADMIN_PASSWORD?: string;
@@ -44,6 +46,13 @@ export function validateEnvironment(raw: RawEnvironment): EnvironmentVariables {
       10,
       14,
     ),
+    THROTTLE_TTL_SECONDS: parseIntegerInRange(
+      raw.THROTTLE_TTL_SECONDS ?? '60',
+      'THROTTLE_TTL_SECONDS',
+      1,
+      3600,
+    ),
+    THROTTLE_LIMIT: parseIntegerInRange(raw.THROTTLE_LIMIT ?? '120', 'THROTTLE_LIMIT', 1, 10000),
     INITIAL_ADMIN_EMAIL: parseOptionalString(raw.INITIAL_ADMIN_EMAIL),
     INITIAL_ADMIN_NAME: parseOptionalString(raw.INITIAL_ADMIN_NAME),
     INITIAL_ADMIN_PASSWORD: parseOptionalString(raw.INITIAL_ADMIN_PASSWORD),

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
 
 import { App } from './App';
 import { AuthenticatedUser } from './features/auth/types';
@@ -48,6 +49,32 @@ const sampleProject = {
   },
   createdAt: '2026-07-24T18:30:00.000Z',
   updatedAt: '2026-07-24T18:30:00.000Z',
+};
+
+const sampleTask = {
+  uuid: 'af1fbb9d-5cc8-4b20-a1b5-fb5d42f3a545',
+  projectUuid: sampleProject.uuid,
+  parentTaskUuid: null,
+  name: 'Actividad principal',
+  description: 'Trabajo observable',
+  startDate: '2026-08-05',
+  endDate: '2026-08-10',
+  status: 'PENDING',
+  progress: 0,
+  estimatedHours: '12.00',
+  plannedBudget: '500.00',
+  actualCost: '0.00',
+  createdAt: '2026-07-24T18:30:00.000Z',
+  updatedAt: '2026-07-24T18:30:00.000Z',
+};
+
+const sampleSubtask = {
+  ...sampleTask,
+  uuid: 'bf1fbb9d-5cc8-4b20-a1b5-fb5d42f3a546',
+  parentTaskUuid: sampleTask.uuid,
+  name: 'Subactividad validada',
+  startDate: '2026-08-11',
+  endDate: '2026-08-12',
 };
 
 describe('App authentication flow', () => {
@@ -507,6 +534,167 @@ describe('Project management flow', () => {
   });
 });
 
+describe('Project detail behavior', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('proplan.accessToken', 'stored-token');
+    window.history.pushState({}, '', `/projects/${sampleProject.uuid}`);
+    installHttpMock([]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetHttpMock();
+    vi.restoreAllMocks();
+  });
+
+  it('lists activities and preserves date-only values without shifting days', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createTasksRoute([sampleTask, sampleSubtask]),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Actividades' }));
+
+    expect(await screen.findByText('Actividad principal')).toBeInTheDocument();
+    expect(screen.getByText('Subactividad validada')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-05 a 2026-08-10')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nueva actividad' })).toBeInTheDocument();
+  });
+
+  it('lets regular users update progress but hides management actions', async () => {
+    installHttpMock([
+      createMeRoute(standardUser),
+      createProjectDetailRoute(),
+      createTasksRoute([sampleTask]),
+      {
+        method: 'PATCH',
+        url: `/tasks/${sampleTask.uuid}/my-progress`,
+        response: {
+          status: 200,
+          data: { ...sampleTask, status: 'IN_PROGRESS', progress: 50 },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Actividades' }));
+    fireEvent.click(await screen.findByLabelText('Actualizar avance'));
+    fireEvent.change(await screen.findByRole('spinbutton', { name: 'Progreso' }), {
+      target: { value: '50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'PATCH' &&
+            requestEntry.url === `/tasks/${sampleTask.uuid}/my-progress` &&
+            readBody(requestEntry.body).progress === 50,
+        ),
+      ).toBe(true);
+    });
+    expect(screen.queryByRole('button', { name: 'Nueva actividad' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Eliminar actividad')).not.toBeInTheDocument();
+  });
+
+  it('shows empty report states and hides downloads from regular users', async () => {
+    installHttpMock([
+      createMeRoute(standardUser),
+      createProjectDetailRoute(),
+      createStatusReportRoute(),
+      createWorkloadReportRoute([]),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Reportes' }));
+
+    expect(await screen.findByText('No hay horas asignadas.')).toBeInTheDocument();
+    expect(screen.getByText('No hay actividades vencidas.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Exportar PDF' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Exportar Excel' })).not.toBeInTheDocument();
+    expect(
+      getCapturedRequests().some((requestEntry) => requestEntry.url.includes('/reports/budget')),
+    ).toBe(false);
+  });
+
+  it('downloads PDF and Excel exports for project managers', async () => {
+    if (!('createObjectURL' in URL)) {
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        value: () => 'blob:proplan-export',
+      });
+    }
+    if (!('revokeObjectURL' in URL)) {
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        value: () => undefined,
+      });
+    }
+    const createObjectUrl = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:proplan-export');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createStatusReportRoute(),
+      createWorkloadReportRoute([
+        {
+          projectUuid: sampleProject.uuid,
+          userUuid: standardUser.uuid,
+          user: {
+            uuid: standardUser.uuid,
+            name: standardUser.name,
+            email: standardUser.email,
+            role: standardUser.role,
+          },
+          assignedHours: '8.00',
+        },
+      ]),
+      createBudgetReportRoute(),
+      createExportRoute('pdf', 'proplan-proyecto-erp.pdf'),
+      createExportRoute('excel', 'proplan-proyecto-erp.xlsx'),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Reportes' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportar PDF' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'GET' &&
+            requestEntry.url === `/projects/${sampleProject.uuid}/exports/pdf`,
+        ),
+      ).toBe(true);
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportar Excel' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'GET' &&
+            requestEntry.url === `/projects/${sampleProject.uuid}/exports/excel`,
+        ),
+      ).toBe(true);
+    });
+    expect(createObjectUrl).toHaveBeenCalledTimes(2);
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:proplan-export');
+  });
+});
+
 function createMeRoute(user: AuthenticatedUser) {
   return {
     method: 'GET' as const,
@@ -561,6 +749,115 @@ function createProjectsListRoute(projects: unknown[]) {
           total: projects.length,
           totalPages: projects.length > 0 ? 1 : 0,
         },
+      },
+    },
+  };
+}
+
+function createProjectDetailRoute() {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}`,
+    response: {
+      status: 200,
+      data: sampleProject,
+    },
+  };
+}
+
+function createTasksRoute(tasks: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/tasks`,
+    response: {
+      status: 200,
+      data: tasks,
+    },
+  };
+}
+
+function createStatusReportRoute() {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/reports/status`,
+    response: {
+      status: 200,
+      data: {
+        projectUuid: sampleProject.uuid,
+        projectName: sampleProject.name,
+        projectStatus: sampleProject.status,
+        startDate: sampleProject.startDate,
+        endDate: sampleProject.endDate,
+        progressPercentage: '45.00',
+        totalTasks: 1,
+        activeNonCancelledTasks: 1,
+        taskStatusCounts: [],
+        trafficLight: {
+          color: 'GREEN',
+          reasons: ['No existen actividades vencidas.'],
+          today: '2026-08-15',
+          totalActualCost: '0.00',
+          approvedBudget: '0.00',
+          consumedPercentage: '0.00',
+          overdueTasksPercentage: '0.00',
+          overdueTasksCount: 0,
+          activeNonCancelledTasksCount: 1,
+          isProjectOverdue: false,
+          overdueTasks: [],
+          canViewFinancialDetails: true,
+        },
+      },
+    },
+  };
+}
+
+function createWorkloadReportRoute(workload: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/reports/workload`,
+    response: {
+      status: 200,
+      data: workload,
+    },
+  };
+}
+
+function createBudgetReportRoute() {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/reports/budget`,
+    response: {
+      status: 200,
+      data: {
+        approvedBudget: '1500.00',
+        distributedBudget: '500.00',
+        totalActualCost: '125.00',
+        balance: '1375.00',
+        variance: '1375.00',
+        consumedPercentage: '8.33',
+        distributedBudgetDifference: '-1000.00',
+        budgetExceeded: false,
+        operationalBudgetPolicy: 'Se excluyen actividades CANCELLED.',
+        tasks: [],
+      },
+    },
+  };
+}
+
+function createExportRoute(format: 'pdf' | 'excel', fileName: string) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/exports/${format}`,
+    response: {
+      status: 200,
+      data: new Blob(['proplan'], {
+        type:
+          format === 'pdf'
+            ? 'application/pdf'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      headers: {
+        'content-disposition': `attachment; filename="${fileName}"`,
       },
     },
   };

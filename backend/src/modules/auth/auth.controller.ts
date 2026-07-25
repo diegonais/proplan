@@ -6,6 +6,7 @@ import {
   ApiUnauthorizedResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -28,6 +29,12 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 60_000,
+    },
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Iniciar sesión mediante email y contraseña.' })
   @ApiOkResponse({ type: LoginResponseDto })

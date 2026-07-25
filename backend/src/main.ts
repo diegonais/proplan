@@ -2,6 +2,7 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { GlobalExceptionsFilter } from './common/filters/global-exceptions.filter';
@@ -15,8 +16,15 @@ async function bootstrap(): Promise<void> {
   const apiVersion = configService.get('API_VERSION', { infer: true });
   const appPort = configService.get('APP_PORT', { infer: true });
   const corsOrigins = configService.get('CORS_ORIGINS', { infer: true });
+  const nodeEnvironment = configService.get('NODE_ENV', { infer: true });
 
   app.setGlobalPrefix(apiPrefix);
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: false,
+      contentSecurityPolicy: nodeEnvironment === 'production' ? undefined : false,
+    }),
+  );
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: apiVersion,
