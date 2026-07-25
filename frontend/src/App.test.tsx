@@ -104,6 +104,17 @@ describe('App authentication flow', () => {
     expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
   });
 
+  it('toggles the visual theme and keeps the preference', async () => {
+    window.localStorage.setItem('proplan.colorMode', 'light');
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByLabelText('Cambiar a tema oscuro'));
+
+    expect(window.localStorage.getItem('proplan.colorMode')).toBe('dark');
+    expect(screen.getByLabelText('Cambiar a tema claro')).toBeInTheDocument();
+  });
+
   it('shows understandable validation errors', async () => {
     render(<App />);
 

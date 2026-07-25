@@ -1,10 +1,9 @@
-import { CssBaseline, ThemeProvider } from '@mui/material';
 import { BrowserRouter } from 'react-router-dom';
 
 import { NotificationsProvider } from '../../components/feedback/NotificationsProvider';
 import { AuthProvider } from '../../features/auth/AuthProvider';
 import { AppErrorBoundary } from '../../components/feedback/AppErrorBoundary';
-import { appTheme } from '../theme/theme';
+import { ColorModeProvider } from '../theme/ColorModeProvider';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -12,8 +11,7 @@ interface AppProvidersProps {
 
 export function AppProviders({ children }: AppProvidersProps) {
   return (
-    <ThemeProvider theme={appTheme}>
-      <CssBaseline />
+    <ColorModeProvider>
       <AppErrorBoundary>
         <BrowserRouter>
           <NotificationsProvider>
@@ -21,6 +19,6 @@ export function AppProviders({ children }: AppProvidersProps) {
           </NotificationsProvider>
         </BrowserRouter>
       </AppErrorBoundary>
-    </ThemeProvider>
+    </ColorModeProvider>
   );
 }

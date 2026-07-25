@@ -23,6 +23,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 
 import { canAccessNavigationItem, navigationItems } from '../components/navigation/navigationItems';
+import { ThemeModeButton } from '../components/navigation/ThemeModeButton';
 import { useAuth } from '../features/auth/authContext';
 import { getRoleLabel } from '../features/auth/types';
 
@@ -119,6 +120,7 @@ export function AuthenticatedLayout() {
           <Typography component="p" variant="h6" sx={{ flexGrow: 1, fontWeight: 700 }}>
             Sistema de gestión y planificación
           </Typography>
+          <ThemeModeButton color="inherit" />
           <Tooltip title="Cerrar sesión">
             <IconButton
               color="inherit"

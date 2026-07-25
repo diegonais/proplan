@@ -49,20 +49,18 @@ proplan/
 
 ## Guia rapida para levantar el proyecto
 
-Los comandos estan escritos para PowerShell desde la raiz del repositorio:
+Los comandos estan escritos para `cmd.exe` desde la raiz del repositorio. Abrir Simbolo del sistema y ubicarse en la carpeta del proyecto:
 
-```powershell
-cd C:\Users\diegonais\Desktop\proplan
+```cmd
+cd proplan
 ```
-
-Si PowerShell bloquea `npm` por politica de ejecucion, usar `npm.cmd` como se muestra en esta guia.
 
 ### 1. Crear variables de entorno
 
 Crear el archivo `.env` de backend/base de datos desde el ejemplo:
 
-```powershell
-Copy-Item .env.example .env
+```cmd
+copy .env.example .env
 ```
 
 Para una demo local, los valores de `.env.example` ya sirven como base. Revisar especialmente:
@@ -80,11 +78,11 @@ DEMO_SEED_PASSWORD=ProplanDemo2026!
 
 Crear el archivo `frontend/.env`:
 
-```powershell
-@"
-VITE_API_BASE_URL=http://localhost:3000/api/v1
-VITE_TIME_ZONE=America/La_Paz
-"@ | Set-Content frontend\.env
+```cmd
+(
+  echo VITE_API_BASE_URL=http://localhost:3000/api/v1
+  echo VITE_TIME_ZONE=America/La_Paz
+) > frontend\.env
 ```
 
 No subir archivos `.env` ni credenciales reales.
@@ -93,27 +91,27 @@ No subir archivos `.env` ni credenciales reales.
 
 Backend:
 
-```powershell
+```cmd
 cd backend
-npm.cmd ci
+npm ci
 ```
 
 Frontend:
 
-```powershell
+```cmd
 cd ..\frontend
-npm.cmd ci
+npm ci
 ```
 
 Volver a la raiz:
 
-```powershell
+```cmd
 cd ..
 ```
 
 ### 3. Levantar PostgreSQL
 
-```powershell
+```cmd
 docker compose up -d
 docker compose ps
 ```
@@ -122,15 +120,15 @@ Esperar a que el servicio `proplan-postgres` aparezca como `healthy`.
 
 Para ver logs de la base de datos:
 
-```powershell
+```cmd
 docker compose logs -f proplan-postgres
 ```
 
 ### 4. Ejecutar migraciones
 
-```powershell
+```cmd
 cd backend
-npm.cmd run migration:run
+npm run migration:run
 ```
 
 El backend usa `synchronize: false`, por eso las migraciones son obligatorias antes de sembrar datos o iniciar la API.
@@ -139,16 +137,16 @@ El backend usa `synchronize: false`, por eso las migraciones son obligatorias an
 
 Ejecutar el seed completo:
 
-```powershell
-npm.cmd run seed:demo
+```cmd
+npm run seed:demo
 ```
 
 El seed demo es idempotente: se puede ejecutar mas de una vez sin duplicar los registros oficiales de demo.
 
 Tambien existe un seed minimo de administrador:
 
-```powershell
-npm.cmd run seed:initial-admin
+```cmd
+npm run seed:initial-admin
 ```
 
 Para la presentacion se recomienda usar `seed:demo`, porque crea usuarios, proyectos, actividades, subactividades, dependencias, equipo, asignaciones, responsables principales, horas, presupuestos, costos y escenarios de semaforo.
@@ -157,9 +155,9 @@ Para la presentacion se recomienda usar `seed:demo`, porque crea usuarios, proye
 
 Abrir una terminal nueva en la raiz del proyecto:
 
-```powershell
-cd C:\Users\diegonais\Desktop\proplan\backend
-npm.cmd run start:dev
+```cmd
+cd backend
+npm run start:dev
 ```
 
 Verificar:
@@ -171,9 +169,9 @@ Verificar:
 
 Abrir otra terminal nueva:
 
-```powershell
-cd C:\Users\diegonais\Desktop\proplan\frontend
-npm.cmd run dev
+```cmd
+cd frontend
+npm run dev
 ```
 
 Abrir la aplicacion:
@@ -205,24 +203,24 @@ Estos usuarios son solo para demostracion local. No usar datos reales.
 
 Detener PostgreSQL sin borrar datos:
 
-```powershell
+```cmd
 docker compose stop
 ```
 
 Reiniciar PostgreSQL:
 
-```powershell
+```cmd
 docker compose restart proplan-postgres
 ```
 
 Eliminar la base local completa y empezar desde cero:
 
-```powershell
+```cmd
 docker compose down -v
 docker compose up -d
 cd backend
-npm.cmd run migration:run
-npm.cmd run seed:demo
+npm run migration:run
+npm run seed:demo
 ```
 
 Usar `docker compose down -v` solo cuando se quiera borrar deliberadamente el volumen local `proplan_postgres_data`.
@@ -231,32 +229,32 @@ Usar `docker compose down -v` solo cuando se quiera borrar deliberadamente el vo
 
 Backend:
 
-```powershell
-cd C:\Users\diegonais\Desktop\proplan\backend
-npm.cmd run lint
-npm.cmd test
-npm.cmd test -- --coverage --runInBand
-npm.cmd run build
+```cmd
+cd backend
+npm run lint
+npm test
+npm test -- --coverage --runInBand
+npm run build
 ```
 
 Frontend:
 
-```powershell
-cd C:\Users\diegonais\Desktop\proplan\frontend
-npm.cmd run lint
-npm.cmd test
-npm.cmd test -- --coverage
-npm.cmd run build
+```cmd
+cd frontend
+npm run lint
+npm test
+npm test -- --coverage
+npm run build
 ```
 
 ### Migraciones disponibles
 
-```powershell
-cd C:\Users\diegonais\Desktop\proplan\backend
-npm.cmd run migration:create -- src/database/migrations/NombreDeMigracion
-npm.cmd run migration:generate -- src/database/migrations/NombreDeMigracion
-npm.cmd run migration:run
-npm.cmd run migration:revert
+```cmd
+cd backend
+npm run migration:create -- src/database/migrations/NombreDeMigracion
+npm run migration:generate -- src/database/migrations/NombreDeMigracion
+npm run migration:run
+npm run migration:revert
 ```
 
 Ver detalle de pruebas en `docs/testing.md`.

@@ -1,30 +1,44 @@
 import { createTheme } from '@mui/material/styles';
+import type { PaletteMode } from '@mui/material';
 
-export const appTheme = createTheme({
+export function createAppTheme(mode: PaletteMode) {
+  const isDark = mode === 'dark';
+
+  return createTheme({
   palette: {
-    mode: 'light',
+    mode,
     primary: {
-      main: '#1d4ed8',
-      contrastText: '#ffffff',
+      main: isDark ? '#90caf9' : '#1d4ed8',
+      contrastText: isDark ? '#111827' : '#ffffff',
     },
     secondary: {
-      main: '#52525b',
+      main: isDark ? '#d4d4d8' : '#52525b',
     },
     background: {
-      default: '#f6f7f9',
-      paper: '#ffffff',
+      default: isDark ? '#121212' : '#f6f7f9',
+      paper: isDark ? '#1e1e1e' : '#ffffff',
+    },
+    text: {
+      primary: isDark ? '#f4f4f5' : '#18181b',
+      secondary: isDark ? '#c7c7cc' : '#52525b',
+    },
+    divider: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(24, 24, 27, 0.12)',
+    action: {
+      hover: isDark ? 'rgba(144, 202, 249, 0.12)' : 'rgba(29, 78, 216, 0.08)',
+      selected: isDark ? 'rgba(144, 202, 249, 0.18)' : 'rgba(29, 78, 216, 0.12)',
+      disabledBackground: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(24, 24, 27, 0.12)',
     },
     error: {
-      main: '#b91c1c',
+      main: isDark ? '#fca5a5' : '#b91c1c',
     },
     success: {
-      main: '#166534',
+      main: isDark ? '#86efac' : '#166534',
     },
     warning: {
-      main: '#92400e',
+      main: isDark ? '#fcd34d' : '#92400e',
     },
     info: {
-      main: '#0369a1',
+      main: isDark ? '#7dd3fc' : '#0369a1',
     },
   },
   typography: {
@@ -67,12 +81,36 @@ export const appTheme = createTheme({
     },
     MuiCssBaseline: {
       styleOverrides: {
+        html: {
+          colorScheme: mode,
+        },
         body: {
           minWidth: 320,
         },
         ':focus-visible': {
-          outline: '3px solid #f59e0b',
+          outline: `3px solid ${isDark ? '#fbbf24' : '#f59e0b'}`,
           outlineOffset: 2,
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        head: {
+          fontWeight: 700,
         },
       },
     },
@@ -83,4 +121,5 @@ export const appTheme = createTheme({
       },
     },
   },
-});
+  });
+}
