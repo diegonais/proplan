@@ -47,212 +47,219 @@ proplan/
 - Git.
 - Puertos disponibles: `5432`, `3000` y `5173`.
 
-## Variables de entorno
+## Guia rapida para levantar el proyecto
 
-Crear `.env` en la raiz a partir de `.env.example`:
+Los comandos estan escritos para PowerShell desde la raiz del repositorio:
+
+```powershell
+cd C:\Users\diegonais\Desktop\proplan
+```
+
+Si PowerShell bloquea `npm` por politica de ejecucion, usar `npm.cmd` como se muestra en esta guia.
+
+### 1. Crear variables de entorno
+
+Crear el archivo `.env` de backend/base de datos desde el ejemplo:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Variables principales:
-
-| Variable | Uso |
-| --- | --- |
-| `NODE_ENV` | `development`, `test` o `production`. |
-| `APP_PORT` | Puerto del backend. Por defecto `3000`. |
-| `API_PREFIX` | Prefijo global. Por defecto `api`. |
-| `API_VERSION` | Version URI. Por defecto `1`. |
-| `TIME_ZONE` | Debe ser `America/La_Paz`. |
-| `CORS_ORIGINS` | Origenes permitidos del frontend. |
-| `JWT_SECRET` | Secreto JWT local. No usar valores reales compartidos. |
-| `JWT_EXPIRES_IN` | Duracion del token. |
-| `BCRYPT_SALT_ROUNDS` | Rondas de hash, entre 10 y 14. |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | Conexion PostgreSQL. |
-| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` | Seed minimo de administrador. |
-| `DEMO_SEED_PASSWORD` | Password local para todos los usuarios ficticios del seed demo. |
-
-El frontend puede usar `frontend/.env`:
+Para una demo local, los valores de `.env.example` ya sirven como base. Revisar especialmente:
 
 ```text
+TIME_ZONE=America/La_Paz
+CORS_ORIGINS=http://localhost:5173
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=proplan
+DB_USERNAME=proplan_app
+DB_PASSWORD=change_me_for_local_development
+DEMO_SEED_PASSWORD=ProplanDemo2026!
+```
+
+Crear el archivo `frontend/.env`:
+
+```powershell
+@"
 VITE_API_BASE_URL=http://localhost:3000/api/v1
 VITE_TIME_ZONE=America/La_Paz
+"@ | Set-Content frontend\.env
 ```
 
 No subir archivos `.env` ni credenciales reales.
 
-## PostgreSQL con Docker Compose
+### 2. Instalar dependencias
 
-Levantar PostgreSQL:
+Backend:
+
+```powershell
+cd backend
+npm.cmd ci
+```
+
+Frontend:
+
+```powershell
+cd ..\frontend
+npm.cmd ci
+```
+
+Volver a la raiz:
+
+```powershell
+cd ..
+```
+
+### 3. Levantar PostgreSQL
 
 ```powershell
 docker compose up -d
 docker compose ps
 ```
 
-Ver logs:
+Esperar a que el servicio `proplan-postgres` aparezca como `healthy`.
+
+Para ver logs de la base de datos:
 
 ```powershell
 docker compose logs -f proplan-postgres
 ```
 
-Detener sin destruir datos:
+### 4. Ejecutar migraciones
+
+```powershell
+cd backend
+npm.cmd run migration:run
+```
+
+El backend usa `synchronize: false`, por eso las migraciones son obligatorias antes de sembrar datos o iniciar la API.
+
+### 5. Cargar datos de demostracion
+
+Ejecutar el seed completo:
+
+```powershell
+npm.cmd run seed:demo
+```
+
+El seed demo es idempotente: se puede ejecutar mas de una vez sin duplicar los registros oficiales de demo.
+
+Tambien existe un seed minimo de administrador:
+
+```powershell
+npm.cmd run seed:initial-admin
+```
+
+Para la presentacion se recomienda usar `seed:demo`, porque crea usuarios, proyectos, actividades, subactividades, dependencias, equipo, asignaciones, responsables principales, horas, presupuestos, costos y escenarios de semaforo.
+
+### 6. Iniciar el backend
+
+Abrir una terminal nueva en la raiz del proyecto:
+
+```powershell
+cd C:\Users\diegonais\Desktop\proplan\backend
+npm.cmd run start:dev
+```
+
+Verificar:
+
+- Healthcheck: `http://localhost:3000/api/v1/health`
+- Swagger: `http://localhost:3000/api/docs`
+
+### 7. Iniciar el frontend
+
+Abrir otra terminal nueva:
+
+```powershell
+cd C:\Users\diegonais\Desktop\proplan\frontend
+npm.cmd run dev
+```
+
+Abrir la aplicacion:
+
+```text
+http://localhost:5173
+```
+
+### 8. Iniciar sesion
+
+Credenciales de demostracion local:
+
+| Rol | Email | Password |
+| --- | --- | --- |
+| Administrador | `admin@proplan.local` | `ProplanDemo2026!` |
+| Jefe de proyecto | `laura.mamani@proplan.local` | `ProplanDemo2026!` |
+| Jefe de proyecto | `carlos.quispe@proplan.local` | `ProplanDemo2026!` |
+| Usuario | `ana.choque@proplan.local` | `ProplanDemo2026!` |
+| Usuario | `roberto.vargas@proplan.local` | `ProplanDemo2026!` |
+| Usuario | `maria.flores@proplan.local` | `ProplanDemo2026!` |
+| Usuario | `diego.rivera@proplan.local` | `ProplanDemo2026!` |
+| Usuario | `sofia.nunez@proplan.local` | `ProplanDemo2026!` |
+
+Estos usuarios son solo para demostracion local. No usar datos reales.
+
+## Comandos utiles
+
+### Detener servicios locales
+
+Detener PostgreSQL sin borrar datos:
 
 ```powershell
 docker compose stop
 ```
 
-Reiniciar:
+Reiniciar PostgreSQL:
 
 ```powershell
 docker compose restart proplan-postgres
 ```
 
-El volumen persistente es `proplan_postgres_data`. No ejecutar `docker compose down -v` salvo que se quiera eliminar la base local deliberadamente.
-
-El servicio tiene healthcheck con `pg_isready` y usa `TZ=UTC`/`PGTZ=UTC`; PROPLAN convierte fechas de presentacion con la politica `America/La_Paz`.
-
-## Instalacion
-
-Instalar dependencias:
+Eliminar la base local completa y empezar desde cero:
 
 ```powershell
+docker compose down -v
+docker compose up -d
 cd backend
-npm install
-
-cd ..\frontend
-npm install
+npm.cmd run migration:run
+npm.cmd run seed:demo
 ```
 
-## Migraciones
+Usar `docker compose down -v` solo cuando se quiera borrar deliberadamente el volumen local `proplan_postgres_data`.
 
-El backend usa `synchronize: false`. Ejecutar migraciones antes de sembrar datos:
-
-```powershell
-cd backend
-npm run migration:run
-```
-
-Comandos disponibles:
-
-```powershell
-npm run migration:create -- src/database/migrations/NombreDeMigracion
-npm run migration:generate -- src/database/migrations/NombreDeMigracion
-npm run migration:run
-npm run migration:revert
-```
-
-## Seeds
-
-Seed minimo de administrador:
-
-```powershell
-cd backend
-npm run seed:initial-admin
-```
-
-Seed completo de demostracion local:
-
-```powershell
-cd backend
-npm run seed:demo
-```
-
-El seed demo:
-
-- Es idempotente.
-- Usa datos ficticios.
-- Crea 1 Administrador, 2 Jefes de proyecto y varios Usuarios.
-- Crea proyectos en estados `PLANNING`, `IN_PROGRESS` y `COMPLETED`.
-- Incluye actividades, subactividades, dependencias `FINISH_TO_START`, miembros, asignaciones, responsable principal, horas, presupuestos y costos.
-- Incluye escenarios verde, amarillo y rojo para reportes.
-- No se ejecuta en `NODE_ENV=production`.
-
-Credenciales de demostracion local:
-
-| Rol | Email |
-| --- | --- |
-| Administrador | `admin@proplan.local` |
-| Jefe de proyecto | `laura.mamani@proplan.local` |
-| Jefe de proyecto | `carlos.quispe@proplan.local` |
-| Usuario | `ana.choque@proplan.local` |
-| Usuario | `roberto.vargas@proplan.local` |
-| Usuario | `maria.flores@proplan.local` |
-| Usuario | `diego.rivera@proplan.local` |
-| Usuario | `sofia.nunez@proplan.local` |
-
-Password por defecto: `ProplanDemo2026!`
-
-Para cambiarlo localmente:
-
-```text
-DEMO_SEED_PASSWORD=OtraClaveLocalSegura
-```
-
-Estos usuarios son solo para demostracion local. No usar datos reales.
-
-## Backend
-
-Iniciar API en modo desarrollo:
-
-```powershell
-cd backend
-npm run start:dev
-```
-
-URLs:
-
-- Healthcheck: `http://localhost:3000/api/v1/health`
-- Swagger: `http://localhost:3000/api/docs`
-
-## Frontend
-
-Iniciar Vite:
-
-```powershell
-cd frontend
-npm run dev
-```
-
-Aplicacion:
-
-- `http://localhost:5173`
-
-## Pruebas
+### Validar calidad antes de entregar
 
 Backend:
 
 ```powershell
-cd backend
-npm run lint
-npm run test
+cd C:\Users\diegonais\Desktop\proplan\backend
+npm.cmd run lint
+npm.cmd test
+npm.cmd test -- --coverage --runInBand
+npm.cmd run build
 ```
 
 Frontend:
 
 ```powershell
-cd frontend
-npm run lint
-npm run test
+cd C:\Users\diegonais\Desktop\proplan\frontend
+npm.cmd run lint
+npm.cmd test
+npm.cmd test -- --coverage
+npm.cmd run build
 ```
 
-Ver detalle en `docs/testing.md`.
-
-## Build
-
-Backend:
+### Migraciones disponibles
 
 ```powershell
-cd backend
-npm run build
+cd C:\Users\diegonais\Desktop\proplan\backend
+npm.cmd run migration:create -- src/database/migrations/NombreDeMigracion
+npm.cmd run migration:generate -- src/database/migrations/NombreDeMigracion
+npm.cmd run migration:run
+npm.cmd run migration:revert
 ```
 
-Frontend:
-
-```powershell
-cd frontend
-npm run build
-```
+Ver detalle de pruebas en `docs/testing.md`.
 
 ## Swagger
 

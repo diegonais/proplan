@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { App } from './App';
@@ -29,6 +29,13 @@ const projectManagerUser: AuthenticatedUser = {
   name: 'Jefe PROPLAN',
   email: 'jefe@proplan.local',
   role: 'PROJECT_MANAGER',
+};
+
+const managedStandardUser: AuthenticatedUser = {
+  ...standardUser,
+  uuid: '5f1fbb9d-5cc8-4b20-a1b5-fb5d42f3a540',
+  name: 'Ana Choque',
+  email: 'ana.choque@proplan.local',
 };
 
 const sampleProject = {
@@ -695,6 +702,69 @@ describe('Project detail behavior', () => {
   });
 });
 
+describe('User administration flow', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('proplan.accessToken', 'stored-token');
+    window.history.pushState({}, '', '/admin/users');
+    installHttpMock([]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetHttpMock();
+  });
+
+  it('lists users and creates a managed user as administrator', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createUsersListRoute([managedStandardUser]),
+      {
+        method: 'POST',
+        url: '/users',
+        response: {
+          status: 201,
+          data: {
+            ...managedStandardUser,
+            uuid: '6f1fbb9d-5cc8-4b20-a1b5-fb5d42f3a547',
+            email: 'nuevo.usuario@proplan.local',
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Administracion de usuarios' })).toBeInTheDocument();
+    expect(await screen.findByText('Ana Choque')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo usuario' }));
+    const createDialog = await screen.findByRole('dialog', { name: 'Crear usuario' });
+    const dialog = within(createDialog);
+
+    fireEvent.change(dialog.getByLabelText(/Nombre/), {
+      target: { value: 'Nuevo Usuario' },
+    });
+    fireEvent.change(dialog.getByLabelText(/Email/), {
+      target: { value: 'NUEVO.USUARIO@PROPLAN.LOCAL' },
+    });
+    fireEvent.change(dialog.getByLabelText(/Password temporal/), {
+      target: { value: 'TemporalClave123' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'POST' &&
+            requestEntry.url === '/users' &&
+            readBody(requestEntry.body).email === 'nuevo.usuario@proplan.local',
+        ),
+      ).toBe(true);
+    });
+  });
+});
+
 function createMeRoute(user: AuthenticatedUser) {
   return {
     method: 'GET' as const,
@@ -702,6 +772,25 @@ function createMeRoute(user: AuthenticatedUser) {
     response: {
       status: 200,
       data: user,
+    },
+  };
+}
+
+function createUsersListRoute(users: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: '/users',
+    response: {
+      status: 200,
+      data: {
+        data: users,
+        meta: {
+          page: 1,
+          limit: 10,
+          total: users.length,
+          totalPages: users.length > 0 ? 1 : 0,
+        },
+      },
     },
   };
 }

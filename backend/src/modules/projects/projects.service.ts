@@ -12,6 +12,7 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
+import { Task } from '../tasks/entities/task.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ListProjectsQueryDto, ProjectSortField } from './dto/list-projects-query.dto';
@@ -31,6 +32,8 @@ export class ProjectsService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(ProjectMember)
     private readonly projectMembersRepository: Repository<ProjectMember>,
+    @InjectRepository(Task)
+    private readonly tasksRepository: Repository<Task>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -172,6 +175,7 @@ export class ProjectsService {
     const nextStartDate = updateProjectDto.startDate ?? project.startDate;
     const nextEndDate = updateProjectDto.endDate ?? project.endDate;
     this.ensureDateRangeIsValid(nextStartDate, nextEndDate);
+    await this.ensureActivitiesRemainInsideProject(project.uuid, nextStartDate, nextEndDate);
 
     if (updateProjectDto.name !== undefined) {
       project.name = updateProjectDto.name.trim();
@@ -347,6 +351,24 @@ export class ProjectsService {
 
     if (endDate < startDate) {
       throw new BadRequestException('La fecha de fin no puede ser anterior a la fecha de inicio.');
+    }
+  }
+
+  private async ensureActivitiesRemainInsideProject(
+    projectUuid: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<void> {
+    const tasks = await this.tasksRepository.find({
+      where: { projectUuid },
+      order: { startDate: 'ASC', endDate: 'ASC', name: 'ASC' },
+    });
+    const taskOutsideRange = tasks.find((task) => task.startDate < startDate || task.endDate > endDate);
+
+    if (taskOutsideRange !== undefined) {
+      throw new BadRequestException(
+        `El proyecto no puede dejar fuera de rango a la actividad "${taskOutsideRange.name}".`,
+      );
     }
   }
 }

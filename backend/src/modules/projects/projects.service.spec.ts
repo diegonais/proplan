@@ -10,13 +10,15 @@ import * as request from 'supertest';
 import type { App as SupertestApp } from 'supertest/types';
 import { DataSource, Repository } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
+import { Task } from '../tasks/entities/task.entity';
 import { User } from '../users/entities/user.entity';
-import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { ProjectSortField, SortOrder } from './dto/list-projects-query.dto';
 import { Project } from './entities/project.entity';
 import { ProjectsController } from './projects.controller';
@@ -37,6 +39,7 @@ describe('ProjectsService', () => {
   let projectsRepository: InMemoryProjectsRepository;
   let usersRepository: InMemoryUsersRepository;
   let projectMembersRepository: InMemoryProjectMembersRepository;
+  let tasksRepository: InMemoryTasksRepository;
   let dataSource: InMemoryDataSource;
   let service: ProjectsService;
 
@@ -49,12 +52,14 @@ describe('ProjectsService', () => {
       createUser('55555555-5555-4555-8555-555555555555', UserRole.PROJECT_MANAGER, false, 'Jefe Inactivo'),
     ]);
     projectMembersRepository = new InMemoryProjectMembersRepository();
+    tasksRepository = new InMemoryTasksRepository();
     projectsRepository = new InMemoryProjectsRepository(usersRepository, projectMembersRepository);
     dataSource = new InMemoryDataSource(projectsRepository, projectMembersRepository);
     service = new ProjectsService(
       projectsRepository as unknown as Repository<Project>,
       usersRepository as unknown as Repository<User>,
       projectMembersRepository as unknown as Repository<ProjectMember>,
+      tasksRepository as unknown as Repository<Task>,
       dataSource as unknown as DataSource,
     );
   });
@@ -152,6 +157,22 @@ describe('ProjectsService', () => {
         userUuid: otherManagerUser.uuid,
       }),
     );
+  });
+
+  it('rejects project date updates that would leave activities outside the project range', async () => {
+    const project = await service.create(createProjectInput({ managerUuid: managerUser.uuid }), adminUser);
+    tasksRepository.tasks.push(
+      createTask({
+        projectUuid: project.uuid,
+        name: 'Actividad de analisis',
+        startDate: '2026-08-10',
+        endDate: '2026-08-20',
+      }),
+    );
+
+    await expect(
+      service.update(project.uuid, { endDate: '2026-08-15' }, adminUser),
+    ).rejects.toThrow('El proyecto no puede dejar fuera de rango a la actividad "Actividad de analisis".');
   });
 
   it('soft deletes projects and excludes them from normal listings', async () => {
@@ -301,6 +322,32 @@ function createProjectRelation(): Project {
   };
 }
 
+function createTask(overrides: Partial<Task> = {}): Task {
+  return {
+    uuid: overrides.uuid ?? randomUUID(),
+    projectUuid: overrides.projectUuid ?? '00000000-0000-4000-8000-000000000002',
+    parentTaskUuid: overrides.parentTaskUuid ?? null,
+    name: overrides.name ?? 'Actividad de prueba',
+    description: overrides.description ?? null,
+    startDate: overrides.startDate ?? '2026-08-01',
+    endDate: overrides.endDate ?? '2026-08-15',
+    status: overrides.status ?? TaskStatus.PENDING,
+    progress: overrides.progress ?? 0,
+    estimatedHours: overrides.estimatedHours ?? '0.00',
+    plannedBudget: overrides.plannedBudget ?? '0.00',
+    actualCost: overrides.actualCost ?? '0.00',
+    createdAt: overrides.createdAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    updatedAt: overrides.updatedAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    deletedAt: overrides.deletedAt ?? null,
+    project: overrides.project ?? createProjectRelation(),
+    parentTask: overrides.parentTask ?? null,
+    subtasks: overrides.subtasks ?? [],
+    assignments: overrides.assignments ?? [],
+    outgoingDependencies: overrides.outgoingDependencies ?? [],
+    incomingDependencies: overrides.incomingDependencies ?? [],
+  };
+}
+
 class InMemoryUsersRepository {
   constructor(private readonly users: User[]) {}
 
@@ -358,6 +405,20 @@ class InMemoryProjectMembersRepository {
           ([key, value]) => member[key as keyof ProjectMember] === value,
         ),
       ).length,
+    );
+  }
+}
+
+class InMemoryTasksRepository {
+  tasks: Task[] = [];
+
+  find(options: { where: Partial<Task>; order?: unknown }): Promise<Task[]> {
+    return Promise.resolve(
+      this.tasks.filter(
+        (task) =>
+          task.deletedAt === null &&
+          Object.entries(options.where).every(([key, value]) => task[key as keyof Task] === value),
+      ),
     );
   }
 }

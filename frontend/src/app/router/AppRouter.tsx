@@ -9,6 +9,7 @@ import { ProjectCreatePage } from '../../features/projects/pages/ProjectCreatePa
 import { ProjectDetailPage } from '../../features/projects/pages/ProjectDetailPage';
 import { ProjectEditPage } from '../../features/projects/pages/ProjectEditPage';
 import { ProjectsListPage } from '../../features/projects/pages/ProjectsListPage';
+import { UsersAdminPage } from '../../features/users/pages/UsersAdminPage';
 import { AuthenticatedLayout } from '../../layouts/AuthenticatedLayout';
 import { PublicLayout } from '../../layouts/PublicLayout';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -40,7 +41,7 @@ export function AppRouter() {
           <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
             <Route
               path="/admin/users"
-              element={<ModulePendingPage title="Administración de usuarios" />}
+              element={<UsersAdminPage />}
             />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
