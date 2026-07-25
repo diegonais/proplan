@@ -1,167 +1,304 @@
 # PROPLAN
 
-PROPLAN es un sistema web para la planificacion y gestion de proyectos tecnologicos. Esta etapa solo prepara la base tecnica del proyecto; no incluye modulos funcionales de negocio.
+PROPLAN es un sistema web de gestion y planificacion de proyectos. Permite administrar usuarios, proyectos, actividades, subactividades, dependencias, miembros, asignaciones, responsables principales, horas, presupuesto, costos ejecutados, reportes, Gantt y exportaciones.
 
-## Requisitos previos
+El proyecto esta preparado para una demostracion academica local con PostgreSQL, API NestJS, frontend React y datos ficticios idempotentes.
 
-- Node.js 24 o superior.
-- npm 11 o superior.
-- Docker y Docker Compose.
-- PostgreSQL se ejecuta localmente mediante Docker Compose.
+## Arquitectura
 
-## Estructura
+PROPLAN usa una arquitectura cliente-servidor:
+
+- Frontend: aplicacion React con TypeScript y Material UI.
+- Backend: API REST NestJS con TypeScript, Swagger, JWT, guards por rol y TypeORM.
+- Base de datos: PostgreSQL con migraciones, UUID y eliminacion logica en proyectos y actividades.
+- Comunicacion: JSON sobre HTTP bajo el prefijo `http://localhost:3000/api/v1`.
+
+Estructura principal:
 
 ```text
 proplan/
-  backend/    API NestJS con TypeORM y PostgreSQL
-  frontend/   Aplicacion React con Vite y Material UI
-  docs/       Documentacion del proyecto
+  backend/    API NestJS, TypeORM, modulos de dominio, migraciones y seeds
+  frontend/   React, Vite, Material UI, rutas y consumo de API
+  docs/       Manuales tecnicos, usuario, API, pruebas y modelo de datos
 ```
 
-`AGENTS.md` y `docs/organización.md` son la fuente principal de verdad del proyecto.
+`AGENTS.md` y `docs/organizacion.md` o `docs/organización.md`, segun el nombre existente en el entorno, son la fuente de reglas del proyecto. No modificar el cronograma tentativo universitario para preparar la demo.
+
+## Stack
+
+| Area | Tecnologia |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite |
+| UI | Material UI |
+| Backend | NestJS 11, TypeScript |
+| Base de datos | PostgreSQL 16 |
+| ORM | TypeORM |
+| Seguridad | JWT, Passport, bcrypt, Helmet, throttling |
+| API docs | Swagger |
+| Reportes | PDFKit y ExcelJS |
+| Pruebas | Jest, Vitest, Testing Library |
+| Contenedores | Docker Compose para PostgreSQL |
+
+## Requisitos
+
+- Node.js 24 o superior.
+- npm 11 o superior.
+- Docker Desktop o Docker Engine con Docker Compose.
+- Git.
+- Puertos disponibles: `5432`, `3000` y `5173`.
 
 ## Variables de entorno
 
-Crear un archivo `.env` en la raiz a partir de `.env.example`:
+Crear `.env` en la raiz a partir de `.env.example`:
 
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env
 ```
 
-No usar credenciales reales en desarrollo local ni subir archivos `.env` al repositorio.
+Variables principales:
 
-El frontend usa variables de Vite. Crear `frontend/.env` a partir de `frontend/.env.example` cuando sea necesario.
+| Variable | Uso |
+| --- | --- |
+| `NODE_ENV` | `development`, `test` o `production`. |
+| `APP_PORT` | Puerto del backend. Por defecto `3000`. |
+| `API_PREFIX` | Prefijo global. Por defecto `api`. |
+| `API_VERSION` | Version URI. Por defecto `1`. |
+| `TIME_ZONE` | Debe ser `America/La_Paz`. |
+| `CORS_ORIGINS` | Origenes permitidos del frontend. |
+| `JWT_SECRET` | Secreto JWT local. No usar valores reales compartidos. |
+| `JWT_EXPIRES_IN` | Duracion del token. |
+| `BCRYPT_SALT_ROUNDS` | Rondas de hash, entre 10 y 14. |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | Conexion PostgreSQL. |
+| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` | Seed minimo de administrador. |
+| `DEMO_SEED_PASSWORD` | Password local para todos los usuarios ficticios del seed demo. |
 
-## PostgreSQL
+El frontend puede usar `frontend/.env`:
 
-```bash
+```text
+VITE_API_BASE_URL=http://localhost:3000/api/v1
+VITE_TIME_ZONE=America/La_Paz
+```
+
+No subir archivos `.env` ni credenciales reales.
+
+## PostgreSQL con Docker Compose
+
+Levantar PostgreSQL:
+
+```powershell
 docker compose up -d
 docker compose ps
 ```
 
-El servicio disponible es `proplan-postgres` y usa un volumen persistente llamado `proplan_postgres_data`.
+Ver logs:
 
-## Backend
+```powershell
+docker compose logs -f proplan-postgres
+```
 
-```bash
+Detener sin destruir datos:
+
+```powershell
+docker compose stop
+```
+
+Reiniciar:
+
+```powershell
+docker compose restart proplan-postgres
+```
+
+El volumen persistente es `proplan_postgres_data`. No ejecutar `docker compose down -v` salvo que se quiera eliminar la base local deliberadamente.
+
+El servicio tiene healthcheck con `pg_isready` y usa `TZ=UTC`/`PGTZ=UTC`; PROPLAN convierte fechas de presentacion con la politica `America/La_Paz`.
+
+## Instalacion
+
+Instalar dependencias:
+
+```powershell
 cd backend
 npm install
-npm run start:dev
-```
 
-La API queda disponible en `http://localhost:3000/api/v1/health`.
-
-Swagger queda disponible en `http://localhost:3000/api/docs`.
-
-### Usuario inicial de desarrollo
-
-Para crear el primer Administrador de forma idempotente en desarrollo, configurar en `.env`:
-
-```bash
-INITIAL_ADMIN_EMAIL=admin@proplan.local
-INITIAL_ADMIN_NAME=Administrador PROPLAN
-INITIAL_ADMIN_PASSWORD=change_me_for_local_development
-```
-
-Luego ejecutar:
-
-```bash
-cd backend
-npm run seed:initial-admin
-```
-
-El seed no duplica el usuario si el email ya existe y no debe ejecutarse en produccion.
-
-### Cierre de sesion
-
-Esta fase usa JWT sin persistencia de sesiones ni refresh tokens. Por ello, el cierre de sesion consiste en eliminar el token almacenado por el cliente de forma segura.
-
-## Frontend
-
-```bash
-cd frontend
+cd ..\frontend
 npm install
-npm run dev
-```
-
-La aplicacion queda disponible en `http://localhost:5173`.
-
-## Calidad
-
-Backend:
-
-```bash
-cd backend
-npm run lint
-npm run test
-npm run build
-```
-
-Frontend:
-
-```bash
-cd frontend
-npm run lint
-npm run test
-npm run build
 ```
 
 ## Migraciones
 
-El backend usa TypeORM con `synchronize: false`. Los cambios de base de datos deben pasar por migraciones.
+El backend usa `synchronize: false`. Ejecutar migraciones antes de sembrar datos:
 
-```bash
+```powershell
 cd backend
+npm run migration:run
+```
+
+Comandos disponibles:
+
+```powershell
 npm run migration:create -- src/database/migrations/NombreDeMigracion
 npm run migration:generate -- src/database/migrations/NombreDeMigracion
 npm run migration:run
 npm run migration:revert
 ```
 
-## Politica de UUID
+## Seeds
 
-No se deben usar identificadores numericos autoincrementales. Las entidades futuras deberan usar UUID como identificador primario.
+Seed minimo de administrador:
 
-## Fechas y zona horaria
+```powershell
+cd backend
+npm run seed:initial-admin
+```
 
-- La zona horaria funcional del sistema es `America/La_Paz`.
-- Instantes tecnicos como `createdAt`, `updatedAt`, inicio de sesion y eventos del sistema se almacenaran como `timestamptz`.
-- Los instantes se conservaran en UTC en PostgreSQL y se convertiran a `America/La_Paz` solo para presentacion.
-- Fechas funcionales sin hora se manejaran como `date` en PostgreSQL.
-- Las fechas `date` se intercambiaran como cadenas `YYYY-MM-DD`.
-- No realizar ajustes manuales sumando o restando horas.
+Seed completo de demostracion local:
 
-## Exportaciones PDF y Excel
+```powershell
+cd backend
+npm run seed:demo
+```
 
-Los reportes completos de proyecto se generan desde el backend mediante:
+El seed demo:
 
-- `GET /api/v1/projects/:projectUuid/exports/pdf`
-- `GET /api/v1/projects/:projectUuid/exports/excel`
+- Es idempotente.
+- Usa datos ficticios.
+- Crea 1 Administrador, 2 Jefes de proyecto y varios Usuarios.
+- Crea proyectos en estados `PLANNING`, `IN_PROGRESS` y `COMPLETED`.
+- Incluye actividades, subactividades, dependencias `FINISH_TO_START`, miembros, asignaciones, responsable principal, horas, presupuestos y costos.
+- Incluye escenarios verde, amarillo y rojo para reportes.
+- No se ejecuta en `NODE_ENV=production`.
 
-Permisos:
+Credenciales de demostracion local:
 
-- Administrador: puede exportar cualquier proyecto.
-- Jefe de proyecto: puede exportar solamente proyectos donde sea responsable.
-- Usuario: no puede exportar reportes completos ni informacion financiera.
+| Rol | Email |
+| --- | --- |
+| Administrador | `admin@proplan.local` |
+| Jefe de proyecto | `laura.mamani@proplan.local` |
+| Jefe de proyecto | `carlos.quispe@proplan.local` |
+| Usuario | `ana.choque@proplan.local` |
+| Usuario | `roberto.vargas@proplan.local` |
+| Usuario | `maria.flores@proplan.local` |
+| Usuario | `diego.rivera@proplan.local` |
+| Usuario | `sofia.nunez@proplan.local` |
 
-Controles aplicados:
+Password por defecto: `ProplanDemo2026!`
 
-- El UUID del proyecto se valida con `ParseUUIDPipe`.
-- El proyecto debe existir y no estar eliminado logicamente.
-- El backend calcula semaforo, progreso, dependencias, asignaciones y resumen financiero.
-- El nombre de archivo se normaliza a caracteres seguros e incluye un segmento del UUID.
-- La respuesta configura `Content-Type`, `Content-Disposition` y `Content-Length`.
-- Los archivos se generan en memoria y no se escriben temporales.
-- Los valores de Excel que comienzan con `=`, `+`, `-` o `@` se prefijan con apostrofo para evitar inyeccion de formulas.
-- No se exportan `passwordHash`, tokens ni campos internos sensibles.
-- Las fechas de planificacion `YYYY-MM-DD` se mantienen sin conversion.
-- Los timestamps de generacion se muestran en `America/La_Paz`.
+Para cambiarlo localmente:
 
-Librerias utilizadas:
+```text
+DEMO_SEED_PASSWORD=OtraClaveLocalSegura
+```
 
-| Libreria | Version instalada | Uso | Licencia |
-| --- | --- | --- | --- |
-| `pdfkit` | 0.19.1 | Generacion de PDF en memoria | MIT |
-| `exceljs` | 4.4.0 | Generacion de libros `.xlsx` en memoria | MIT |
+Estos usuarios son solo para demostracion local. No usar datos reales.
 
-No se implementan plantillas complejas, firmas digitales, facturacion, envio por correo ni almacenamiento documental.
+## Backend
+
+Iniciar API en modo desarrollo:
+
+```powershell
+cd backend
+npm run start:dev
+```
+
+URLs:
+
+- Healthcheck: `http://localhost:3000/api/v1/health`
+- Swagger: `http://localhost:3000/api/docs`
+
+## Frontend
+
+Iniciar Vite:
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Aplicacion:
+
+- `http://localhost:5173`
+
+## Pruebas
+
+Backend:
+
+```powershell
+cd backend
+npm run lint
+npm run test
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm run lint
+npm run test
+```
+
+Ver detalle en `docs/testing.md`.
+
+## Build
+
+Backend:
+
+```powershell
+cd backend
+npm run build
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm run build
+```
+
+## Swagger
+
+Swagger queda disponible en:
+
+```text
+http://localhost:3000/api/docs
+```
+
+Usar `POST /api/v1/auth/login` para obtener el token y luego autorizar con Bearer token en Swagger.
+
+## Politica UUID
+
+- Todas las entidades de dominio usan `uuid` como clave primaria.
+- Las claves foraneas usan nombres explicitos: `projectUuid`, `userUuid`, `taskUuid`, `managerUuid`, `parentTaskUuid`, `predecessorTaskUuid`, `successorTaskUuid`.
+- Las rutas reciben parametros descriptivos como `:uuid`, `:projectUuid` o `:taskUuid`.
+- El backend valida UUID con `ParseUUIDPipe` o validadores equivalentes.
+- No se usan identificadores numericos autoincrementales.
+- Los UUID fijos del seed demo existen solo para garantizar idempotencia local.
+
+## Politica de fechas y zona horaria
+
+- Zona oficial: `America/La_Paz`.
+- Fechas de planificacion: tipo PostgreSQL `date`, formato `YYYY-MM-DD`, sin hora.
+- Instantes tecnicos: `timestamptz`, persistidos en UTC.
+- La API expone instantes en ISO 8601.
+- El frontend convierte instantes tecnicos a `America/La_Paz` para presentacion.
+- No sumar ni restar cuatro horas manualmente.
+
+## Solucion de errores comunes
+
+| Problema | Revision |
+| --- | --- |
+| `ECONNREFUSED` al iniciar backend | Verificar `docker compose ps` y que PostgreSQL este healthy. |
+| Error de autenticacion en seed | Revisar `DB_USERNAME`, `DB_PASSWORD` y migraciones aplicadas. |
+| `JWT_SECRET is required` | Completar `.env` desde `.env.example`. |
+| Swagger abre pero endpoints devuelven 401 | Ejecutar login y configurar Bearer token. |
+| Puerto 5432 ocupado | Cambiar `DB_PORT` en `.env` o detener el PostgreSQL local existente. |
+| Seed demo duplica datos | El seed oficial usa UUID fijos; si se editaron manualmente claves o se importaron datos externos, limpiar solo la base local de demo con cuidado. |
+| Frontend no consume API | Revisar `VITE_API_BASE_URL` y `CORS_ORIGINS`. |
+
+## Documentacion adicional
+
+- `docs/technical-manual.md`
+- `docs/user-manual.md`
+- `docs/testing.md`
+- `docs/api-overview.md`
+- `docs/database-model.md`
+- `docs/third-party-licenses.md`

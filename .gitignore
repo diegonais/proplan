@@ -23,4 +23,10 @@ backend/dist/
 frontend/dist/
 
 docs/*
+!docs/api-overview.md
+!docs/database-model.md
+!docs/technical-manual.md
+!docs/testing.md
+!docs/third-party-licenses.md
+!docs/user-manual.md
 AGENTS.md
