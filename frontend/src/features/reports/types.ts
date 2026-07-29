@@ -85,6 +85,9 @@ export interface DashboardReport {
   activeProjects: number;
   pendingTasks: number;
   visibleMembers: number;
+  operationalResources: number;
+  currentlyAssignedResources: number;
+  resourcesInMaintenance: number;
   averageProgress: string;
   projectSummaries: DashboardProjectSummary[];
   upcomingMilestones: DashboardMilestone[];
@@ -113,10 +116,7 @@ export interface ProjectStatusReport {
 export type ProjectBudgetReport = ProjectFinancialSummary;
 
 export type ResourceCurrentAvailabilityStatus =
-  | 'DISPONIBLE'
-  | 'ASIGNADO'
-  | 'NO_DISPONIBLE'
-  | 'ELIMINADO';
+  'DISPONIBLE' | 'ASIGNADO' | 'NO_DISPONIBLE' | 'ELIMINADO';
 
 export interface ResourceUtilizationProject {
   uuid: string;

@@ -3,12 +3,16 @@ import * as ExcelJS from 'exceljs';
 import { Repository } from 'typeorm';
 
 import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { ResourceCategory } from '../../common/enums/resource-category.enum';
+import { ResourceOperationalStatus } from '../../common/enums/resource-operational-status.enum';
 import { TaskDependencyType } from '../../common/enums/task-dependency-type.enum';
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceAssignment } from '../resource-assignments/entities/resource-assignment.entity';
+import { Resource } from '../resources/entities/resource.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { Task } from '../tasks/entities/task.entity';
@@ -32,6 +36,7 @@ describe('ExportsService', () => {
   let dependenciesRepository: InMemoryTaskDependenciesRepository;
   let assignmentsRepository: InMemoryTaskAssignmentsRepository;
   let membersRepository: InMemoryProjectMembersRepository;
+  let resourceAssignmentsRepository: InMemoryResourceAssignmentsRepository;
   let service: ExportsService;
   let project: Project;
   let parentTask: Task;
@@ -68,22 +73,41 @@ describe('ExportsService', () => {
       createMember(project.uuid, managerUser.uuid),
       createMember(project.uuid, regularUser.uuid),
     ]);
+    resourceAssignmentsRepository = new InMemoryResourceAssignmentsRepository([
+      createResourceAssignment({
+        uuid: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+        resource: createResource({
+          uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+          code: '+LAP-001',
+          name: '@Laptop de desarrollo',
+          category: ResourceCategory.LAPTOP,
+        }),
+        task: parentTask,
+        startDate: '2026-08-01',
+        endDate: '2026-08-10',
+      }),
+    ]);
     service = new ExportsService(
       projectsRepository as unknown as Repository<Project>,
       tasksRepository as unknown as Repository<Task>,
       dependenciesRepository as unknown as Repository<TaskDependency>,
       assignmentsRepository as unknown as Repository<TaskAssignment>,
       membersRepository as unknown as Repository<ProjectMember>,
+      resourceAssignmentsRepository as unknown as Repository<ResourceAssignment>,
     );
   });
 
-  it('generates a non empty PDF with safe headers metadata', async () => {
+  it('generates a non empty PDF with safe headers metadata and assigned resources', async () => {
     const file = await service.generateProjectPdf(project.uuid, adminUser);
+    const pdfText = extractPdfHexText(file.buffer.toString('latin1'));
 
     expect(file.contentType).toBe('application/pdf');
     expect(file.fileName).toMatch(/^proplan-proyecto-exportable-/);
     expect(file.fileName).toMatch(/\.pdf$/);
     expect(file.buffer.length).toBeGreaterThan(1000);
+    expect(pdfText).toContain('Recursos asignados');
+    expect(pdfText).toContain('+LAP-001');
+    expect(pdfText).toContain('PROGRAMADA');
   });
 
   it('generates an Excel workbook with the required sheets', async () => {
@@ -96,14 +120,51 @@ describe('ExportsService', () => {
       'Equipo',
       'Presupuesto y costos',
       'Dependencias',
+      'Recursos',
+      'Asignaciones de recursos',
+    ]);
+  });
+
+  it('generates resource Excel sheets with requested headers', async () => {
+    const workbook = await loadGeneratedWorkbook(service, project.uuid, adminUser);
+
+    expect(getHeaderValues(workbook, 'Recursos')).toEqual([
+      'Codigo',
+      'Nombre',
+      'Categoria',
+      'Estado operativo',
+      'Activo',
+      'Serie',
+      'Descripcion',
+      'Recurso UUID',
+    ]);
+    expect(getHeaderValues(workbook, 'Asignaciones de recursos')).toEqual([
+      'Codigo',
+      'Recurso',
+      'Categoria',
+      'Estado operativo',
+      'Proyecto',
+      'Actividad',
+      'Fecha inicial',
+      'Fecha final',
+      'Estado temporal',
+      'Asignacion UUID',
+      'Recurso UUID',
+      'Proyecto UUID',
+      'Actividad UUID',
     ]);
   });
 
   it('sanitizes user controlled values that could be interpreted as Excel formulas', async () => {
     const workbook = await loadGeneratedWorkbook(service, project.uuid, adminUser);
     const worksheet = workbook.getWorksheet('Actividades');
+    const resourcesWorksheet = workbook.getWorksheet('Recursos');
+    const resourceAssignmentsWorksheet = workbook.getWorksheet('Asignaciones de recursos');
 
     expect(worksheet?.getCell('B2').value).toBe("'=Actividad con formula");
+    expect(resourcesWorksheet?.getCell('A2').value).toBe("'+LAP-001");
+    expect(resourcesWorksheet?.getCell('B2').value).toBe("'@Laptop de desarrollo");
+    expect(resourceAssignmentsWorksheet?.getCell('A2').value).toBe("'+LAP-001");
     expect(sanitizeExcelText('+SUM(1,1)')).toBe("'+SUM(1,1)");
     expect(sanitizeExcelText('-10')).toBe("'-10");
     expect(sanitizeExcelText('@usuario')).toBe("'@usuario");
@@ -178,6 +239,22 @@ async function loadGeneratedWorkbook(
   return workbook;
 }
 
+function getHeaderValues(workbook: ExcelJS.Workbook, sheetName: string): string[] {
+  const worksheet = workbook.getWorksheet(sheetName);
+
+  if (worksheet === undefined) {
+    throw new Error(`Missing worksheet ${sheetName}.`);
+  }
+
+  const values = worksheet.getRow(1).values;
+
+  if (!Array.isArray(values)) {
+    throw new Error(`Unexpected header values for worksheet ${sheetName}.`);
+  }
+
+  return values.slice(1).map(String);
+}
+
 function stringifyCellValue(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
@@ -188,6 +265,68 @@ function stringifyCellValue(value: unknown): string {
   }
 
   return JSON.stringify(value);
+}
+
+function extractPdfHexText(pdfText: string): string {
+  return Array.from(pdfText.matchAll(/<([0-9a-fA-F]+)>/g))
+    .map((match) => decodeHexText(match[1] ?? ''))
+    .join('');
+}
+
+function decodeHexText(hexText: string): string {
+  const bytes = hexText.match(/.{1,2}/g) ?? [];
+
+  return bytes.map((byte) => String.fromCharCode(Number.parseInt(byte, 16))).join('');
+}
+
+function createResource(overrides: Partial<Resource>): Resource {
+  return {
+    uuid: overrides.uuid ?? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    name: overrides.name ?? 'Laptop de desarrollo',
+    description: overrides.description ?? 'Equipo para pruebas.',
+    code: overrides.code ?? 'LAP-001',
+    category: overrides.category ?? ResourceCategory.LAPTOP,
+    serialNumber: overrides.serialNumber ?? 'SN-001',
+    operationalStatus: overrides.operationalStatus ?? ResourceOperationalStatus.OPERATIONAL,
+    notes: overrides.notes ?? null,
+    isActive: overrides.isActive ?? true,
+    createdAt: overrides.createdAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    updatedAt: overrides.updatedAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    deletedAt: overrides.deletedAt ?? null,
+    assignments: [],
+  };
+}
+
+function createResourceAssignment(overrides: Partial<ResourceAssignment>): ResourceAssignment {
+  const resource =
+    overrides.resource ??
+    createResource({
+      uuid: overrides.resourceUuid ?? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+  const task = overrides.task ?? null;
+
+  return {
+    uuid: overrides.uuid ?? 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    resourceUuid: overrides.resourceUuid ?? resource.uuid,
+    projectUuid: overrides.projectUuid ?? projectUuidForTest(),
+    taskUuid: overrides.taskUuid ?? task?.uuid ?? null,
+    startDate: overrides.startDate ?? '2026-08-01',
+    endDate: overrides.endDate ?? '2026-08-10',
+    assignedByUuid: overrides.assignedByUuid ?? managerUser.uuid,
+    notes: overrides.notes ?? null,
+    createdAt: overrides.createdAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    updatedAt: overrides.updatedAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    deletedAt: overrides.deletedAt ?? null,
+    resource,
+    project: overrides.project ?? createProject(),
+    task,
+    assignedBy:
+      overrides.assignedBy ?? createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, 'Jefe'),
+  };
+}
+
+function projectUuidForTest(): string {
+  return '99999999-9999-4999-8999-999999999999';
 }
 
 function createAuthenticatedUser(uuid: string, role: UserRole): AuthenticatedUser {
@@ -357,6 +496,22 @@ class InMemoryProjectMembersRepository {
 
   find(options: { where: Partial<ProjectMember> }): Promise<ProjectMember[]> {
     return Promise.resolve(this.members.filter((member) => matchesWhere(member, options.where)));
+  }
+}
+
+class InMemoryResourceAssignmentsRepository {
+  constructor(private readonly assignments: readonly ResourceAssignment[]) {}
+
+  find(options: {
+    where: Partial<ResourceAssignment>;
+    relations?: unknown;
+    order?: unknown;
+  }): Promise<ResourceAssignment[]> {
+    return Promise.resolve(
+      this.assignments.filter(
+        (assignment) => assignment.deletedAt === null && matchesWhere(assignment, options.where),
+      ),
+    );
   }
 }
 

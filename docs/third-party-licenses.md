@@ -50,3 +50,5 @@ PostgreSQL se distribuye bajo PostgreSQL License, una licencia permisiva. En des
 ## Nota
 
 PROPLAN no debe copiar codigo fuente de dependencias dentro del repositorio. Las dependencias deben instalarse mediante `npm install` desde los manifiestos del proyecto.
+
+La integracion de recursos en dashboard, PDF, Excel y seeds reutiliza dependencias existentes (`pdfkit`, `exceljs`, TypeORM, Jest/Vitest) y no agrega paquetes de terceros nuevos.

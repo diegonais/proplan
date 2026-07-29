@@ -10,7 +10,7 @@
 - Los montos usan `numeric` con escala decimal.
 - Fechas de planificacion usan `date`.
 - Instantes tecnicos usan `timestamptz`.
-- Proyectos y actividades soportan eliminacion logica mediante `deletedAt`.
+- Proyectos, actividades, recursos y asignaciones de recursos soportan eliminacion logica mediante `deletedAt`.
 - No se agregan entidades fuera del alcance aprobado.
 
 ## Entidades
@@ -170,6 +170,77 @@ Reglas de dominio:
 - Las actividades deben pertenecer al mismo proyecto.
 - La sucesora no inicia antes de que termine la predecesora.
 
+### Resource
+
+Tabla: `resources`
+
+Campos:
+
+- `uuid`: UUID, clave primaria.
+- `name`: nombre visible.
+- `description`: descripcion opcional.
+- `code`: codigo interno unico.
+- `category`: categoria del recurso.
+- `serialNumber`: numero de serie opcional.
+- `operationalStatus`: `OPERATIONAL`, `MAINTENANCE`, `OUT_OF_SERVICE`.
+- `notes`: notas opcionales.
+- `isActive`: estado activo del catalogo.
+- `createdAt`: `timestamptz`.
+- `updatedAt`: `timestamptz`.
+- `deletedAt`: `timestamptz`, eliminacion logica.
+
+Categorias:
+
+- `DESKTOP_COMPUTER`
+- `LAPTOP`
+- `SERVER`
+- `MOBILE_DEVICE`
+- `TABLET`
+- `PERIPHERAL`
+- `NETWORK_EQUIPMENT`
+- `SOFTWARE_LICENSE`
+- `CLOUD_SERVICE`
+- `OTHER`
+
+Restricciones:
+
+- `code` unico.
+- La disponibilidad no se guarda como campo; se calcula desde estado operativo y asignaciones.
+
+### ResourceAssignment
+
+Tabla: `resource_assignments`
+
+Campos:
+
+- `uuid`: UUID, clave primaria.
+- `resourceUuid`: UUID del recurso.
+- `projectUuid`: UUID del proyecto.
+- `taskUuid`: UUID opcional de actividad.
+- `startDate`: `date`.
+- `endDate`: `date`.
+- `assignedByUuid`: UUID del usuario que asigna.
+- `notes`: notas opcionales.
+- `createdAt`: `timestamptz`.
+- `updatedAt`: `timestamptz`.
+- `deletedAt`: `timestamptz`, eliminacion logica.
+
+Restricciones:
+
+- `endDate >= startDate`.
+- `resourceUuid` referencia `resources.uuid`.
+- `projectUuid` referencia `projects.uuid`.
+- `taskUuid` referencia `tasks.uuid` cuando existe.
+- `assignedByUuid` referencia `users.uuid`.
+- Restriccion de exclusion PostgreSQL para impedir rangos superpuestos activos por recurso.
+
+Reglas de dominio:
+
+- Toda asignacion pertenece a un proyecto.
+- La actividad opcional debe pertenecer al mismo proyecto.
+- Las fechas deben estar dentro del proyecto y, si corresponde, de la actividad.
+- Solo se asignan recursos activos, no eliminados y en estado `OPERATIONAL`.
+
 ## Relaciones
 
 - `User` dirige muchos `Project` por `Project.managerUuid`.
@@ -180,13 +251,19 @@ Reglas de dominio:
 - `Task` tiene muchas `TaskAssignment`.
 - `User` tiene muchas `TaskAssignment`.
 - `Task` se relaciona con otras `Task` mediante `TaskDependency`.
+- `Resource` tiene muchas `ResourceAssignment`.
+- `Project` tiene muchas `ResourceAssignment`.
+- `Task` puede tener muchas `ResourceAssignment`.
+- `User` registra muchas `ResourceAssignment` mediante `assignedByUuid`.
 
 ## Eliminacion logica
 
 - `Project.deletedAt` permite conservar trazabilidad.
 - `Task.deletedAt` permite conservar trazabilidad.
+- `Resource.deletedAt` permite conservar trazabilidad del catalogo.
+- `ResourceAssignment.deletedAt` conserva historial de uso.
 - Los listados normales deben excluir eliminados.
-- `isActive` se reserva para usuarios y no reemplaza `deletedAt`.
+- `isActive` se usa para usuarios y recursos, pero no reemplaza `deletedAt`.
 
 ## Fechas
 

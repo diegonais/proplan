@@ -10,7 +10,7 @@ PROPLAN separa responsabilidades:
 
 - Cliente React: interfaz, navegacion, formularios, visualizacion de proyectos, actividades, Gantt, reportes y consumo de API.
 - Servidor NestJS: autenticacion, autorizacion, validaciones, reglas de negocio, persistencia y exportaciones.
-- PostgreSQL: almacenamiento transaccional de usuarios, proyectos, miembros, actividades, dependencias y asignaciones.
+- PostgreSQL: almacenamiento transaccional de usuarios, proyectos, miembros, actividades, dependencias, recursos no humanos y asignaciones.
 
 La API se publica bajo `http://localhost:3000/api/v1` y el frontend bajo `http://localhost:5173`.
 
@@ -41,6 +41,8 @@ backend/src/
     tasks/
     task-assignments/
     task-dependencies/
+    resources/
+    resource-assignments/
     finances/
     reports/
 ```
@@ -64,6 +66,7 @@ frontend/src/
     errors/
     pending/
     projects/
+    resources/
     reports/
     tasks/
     team/
@@ -87,6 +90,8 @@ Entidades principales:
 - `Task`
 - `TaskAssignment`
 - `TaskDependency`
+- `Resource`
+- `ResourceAssignment`
 
 Todas usan UUID como identificador primario. Los montos se almacenan como `numeric`, no como `float`.
 
@@ -126,7 +131,17 @@ Seed demo:
 npm run seed:demo
 ```
 
-El seed demo no corre en produccion, usa datos ficticios, UUID fijos y password local documentado. Se puede repetir sin duplicar registros.
+El seed demo no corre en produccion, usa datos ficticios, UUID fijos y password local documentado. Se puede repetir sin duplicar registros. Incluye recursos realistas de LogistiSoft, asignaciones activas, programadas y finalizadas sin solapamientos, y un caso documentado para demostrar conflicto de fechas sin insertar una asignacion invalida.
+
+## Exportaciones y dashboard
+
+Las exportaciones completas estan en `ReportsModule` y usan `PDFKit` para PDF y `ExcelJS` para XLSX. Los servicios consultan solo proyectos autorizados para el rol actual y mapean usuarios a campos seguros, sin `passwordHash`.
+
+El PDF de proyecto incluye "Recursos asignados" con codigo, nombre, categoria, estado operativo, proyecto, actividad opcional, fechas `YYYY-MM-DD` y estado temporal calculado con fecha de generacion en `America/La_Paz`.
+
+El Excel contiene hojas separadas para `Recursos` y `Asignaciones de recursos`. Las celdas de texto controladas por usuarios se prefijan cuando empiezan con `=`, `+`, `-` o `@` para prevenir inyeccion de formulas.
+
+El dashboard mantiene una vision general: proyectos activos, actividades pendientes, miembros visibles, avance promedio y tres contadores agregados de recursos visibles. La utilizacion detallada permanece en el modulo Reportes.
 
 ## Variables
 
@@ -225,4 +240,4 @@ npm run test
 npm run build
 ```
 
-La validacion manual de demo debe cubrir login por rol, dashboard, proyectos, actividades, Gantt, reportes, presupuesto y exportaciones.
+La validacion manual de demo debe cubrir login por rol, dashboard, proyectos, actividades, recursos, Gantt, reportes, presupuesto, exportaciones PDF/Excel y fechas de generacion en `America/La_Paz`.

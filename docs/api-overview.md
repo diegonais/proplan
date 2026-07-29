@@ -99,6 +99,28 @@ En interfaz se usa Actividad. En API y codigo se usa `Task`.
 | `PATCH` | `/projects/:projectUuid/budget` | `ADMIN`, `PROJECT_MANAGER` | Actualiza presupuesto aprobado. |
 | `PATCH` | `/tasks/:taskUuid/financials` | `ADMIN`, `PROJECT_MANAGER` | Actualiza presupuesto planificado y costo ejecutado. |
 
+## Recursos
+
+| Metodo | Ruta | Roles | Descripcion |
+| --- | --- | --- | --- |
+| `POST` | `/resources` | `ADMIN` | Crea recurso del catalogo institucional. |
+| `GET` | `/resources` | `ADMIN`, `PROJECT_MANAGER` | Lista recursos con paginacion, busqueda y filtros. |
+| `GET` | `/resources/:uuid` | `ADMIN`, `PROJECT_MANAGER` | Consulta un recurso activo. |
+| `PATCH` | `/resources/:uuid` | `ADMIN` | Actualiza datos generales del recurso. |
+| `PATCH` | `/resources/:uuid/status` | `ADMIN` | Cambia estado operativo o activo. |
+| `DELETE` | `/resources/:uuid` | `ADMIN` | Elimina logicamente un recurso sin borrar historial. |
+| `GET` | `/resources/:uuid/availability` | `ADMIN`, `PROJECT_MANAGER` | Consulta disponibilidad calculada por intervalo. |
+
+## Asignaciones de recursos
+
+| Metodo | Ruta | Roles | Descripcion |
+| --- | --- | --- | --- |
+| `POST` | `/projects/:projectUuid/resource-assignments` | `ADMIN`, `PROJECT_MANAGER` | Asigna recurso a proyecto o actividad. |
+| `GET` | `/projects/:projectUuid/resource-assignments` | Todos con acceso | Lista asignaciones de recursos del proyecto. |
+| `GET` | `/projects/:projectUuid/available-resources` | `ADMIN`, `PROJECT_MANAGER` | Lista recursos disponibles para un intervalo. |
+| `PATCH` | `/resource-assignments/:uuid` | `ADMIN`, `PROJECT_MANAGER` | Actualiza fechas, actividad o notas. |
+| `DELETE` | `/resource-assignments/:uuid` | `ADMIN`, `PROJECT_MANAGER` | Retira una asignacion mediante eliminacion logica. |
+
 ## Reportes y exportaciones
 
 | Metodo | Ruta | Roles | Descripcion |
@@ -107,10 +129,13 @@ En interfaz se usa Actividad. En API y codigo se usa `Task`.
 | `GET` | `/projects/:projectUuid/reports/gantt` | Todos con acceso | Datos de Gantt. |
 | `GET` | `/projects/:projectUuid/reports/workload` | Todos con acceso | Carga por recurso. |
 | `GET` | `/projects/:projectUuid/reports/budget` | `ADMIN`, `PROJECT_MANAGER` | Presupuesto versus costo. |
+| `GET` | `/projects/:projectUuid/reports/resource-utilization` | Todos con acceso | Utilizacion de recursos asignados. |
 | `GET` | `/projects/:projectUuid/reports/traffic-light` | Todos con acceso | Semaforo calculado. |
 | `GET` | `/projects/:projectUuid/reports/status` | Todos con acceso | Estado general del proyecto. |
 | `GET` | `/projects/:projectUuid/exports/pdf` | `ADMIN`, `PROJECT_MANAGER` | Exporta PDF. |
 | `GET` | `/projects/:projectUuid/exports/excel` | `ADMIN`, `PROJECT_MANAGER` | Exporta Excel. |
+
+Las exportaciones PDF y Excel incorporan recursos asignados sin exponer `passwordHash` ni datos internos no autorizados. El Excel agrega hojas `Recursos` y `Asignaciones de recursos` y sanitiza texto que podria ser interpretado como formula.
 
 ## Errores
 

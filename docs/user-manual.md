@@ -28,15 +28,15 @@ Password por defecto: `ProplanDemo2026!`
 
 ### Administrador
 
-Puede gestionar usuarios, consultar todos los proyectos, crear proyectos, asignar jefes de proyecto, consultar reportes financieros y exportar informacion.
+Puede gestionar usuarios, consultar todos los proyectos, crear proyectos, asignar jefes de proyecto, administrar el catalogo de recursos, consultar reportes financieros y exportar informacion.
 
 ### Jefe de proyecto
 
-Puede gestionar los proyectos donde figura como responsable, administrar equipo, actividades, dependencias, asignaciones, presupuesto, costos, Gantt, reportes y exportaciones.
+Puede gestionar los proyectos donde figura como responsable, administrar equipo, actividades, dependencias, asignaciones de recursos, presupuesto, costos, Gantt, reportes y exportaciones.
 
 ### Usuario
 
-Puede consultar proyectos donde participa, revisar actividades asignadas y actualizar su avance cuando corresponda. No administra usuarios ni informacion financiera global.
+Puede consultar proyectos donde participa, revisar actividades asignadas, ver recursos asignados al proyecto o actividad y actualizar su avance cuando corresponda. No administra usuarios, catalogo de recursos ni informacion financiera global.
 
 ## Usuarios
 
@@ -162,6 +162,16 @@ Los jefes de proyecto y administradores pueden revisar:
 
 El costo ejecutado del proyecto se calcula sumando el costo ejecutado de sus actividades activas no canceladas.
 
+## Recursos
+
+> Espacio para captura real: catalogo y pestana de recursos del proyecto.
+
+El modulo principal Recursos muestra el catalogo institucional para Administradores y Jefes de proyecto. El Administrador puede crear, editar, activar, desactivar y cambiar estado operativo. El Jefe de proyecto puede consultar disponibilidad.
+
+En el detalle de proyecto, la pestana Recursos permite administrar asignaciones del proyecto cuando el rol lo autoriza. Una asignacion puede vincularse al proyecto completo o a una actividad. El sistema valida fechas del proyecto y de la actividad, estado operativo `OPERATIONAL` y ausencia de solapamientos.
+
+El seed demo permite mostrar un conflicto intentando asignar `LAP-DEV-001` entre `2026-08-01` y `2026-08-05`; ese intento debe ser rechazado por superponerse con una asignacion activa existente.
+
 ## Gantt
 
 > Espacio para captura real: diagrama de Gantt.
@@ -184,13 +194,14 @@ Reportes disponibles:
 - Dashboard general por rol.
 - Estado general del proyecto.
 - Semaforo verde, amarillo o rojo.
-- Carga de trabajo por recurso.
+- Carga de trabajo por persona del equipo humano.
 - Presupuesto versus costo real.
 - Gantt del proyecto.
+- Utilizacion de recursos.
 
 Escenarios del seed demo:
 
-- Verde: `Portal de seguimiento academico`.
+- Verde: `Portal interno de seguimiento de flotas`.
 - Amarillo: `Implementacion de control de costos`.
 - Rojo: `Migracion de planificacion operativa`.
 
@@ -203,7 +214,7 @@ Los roles Administrador y Jefe de proyecto pueden exportar reportes completos:
 - PDF.
 - Excel.
 
-Los archivos se generan en memoria y no se guardan como temporales en el servidor.
+El PDF incluye una seccion "Recursos asignados". El Excel incluye hojas "Recursos" y "Asignaciones de recursos". Los archivos se generan en memoria, no guardan temporales en el servidor y no muestran campos sensibles como hashes de password.
 
 ## Cierre de sesion
 

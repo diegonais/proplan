@@ -54,7 +54,15 @@ Luego iniciar backend y frontend.
 - Calculo de costo ejecutado del proyecto.
 - Calculo de carga por recurso.
 - Semaforo verde, amarillo y rojo.
-- Exportacion PDF y Excel sin exponer campos sensibles.
+- CRUD y disponibilidad de recursos.
+- Asignaciones de recursos activas, programadas y finalizadas sin solapamiento.
+- Rechazo de intento de conflicto de fechas.
+- Dashboard con contadores agregados de recursos visibles.
+- Exportacion PDF con seccion de recursos asignados.
+- Exportacion Excel con hojas `Recursos` y `Asignaciones de recursos`.
+- Sanitizacion contra inyeccion de formulas en Excel.
+- Fechas de generacion en `America/La_Paz`.
+- Exportaciones sin exponer campos sensibles.
 
 ## Pruebas frontend prioritarias
 
@@ -69,6 +77,7 @@ Luego iniciar backend y frontend.
 - Dialogos de asignaciones y dependencias.
 - Gantt.
 - Reportes.
+- Recursos y asignaciones desde proyecto.
 - Exportaciones.
 - Cierre de sesion.
 - Navegacion con teclado en formularios principales.
@@ -87,7 +96,11 @@ Luego iniciar backend y frontend.
 10. Los tres semaforos se visualizan: verde, amarillo y rojo.
 11. Gantt muestra dependencias `FINISH_TO_START`.
 12. Reporte financiero muestra presupuesto y costos.
-13. PDF y Excel se descargan desde un rol autorizado.
+13. Reporte de utilizacion muestra recursos asignados.
+14. PDF y Excel se descargan desde un rol autorizado.
+15. PDF contiene la seccion "Recursos asignados".
+16. Excel contiene hojas "Recursos" y "Asignaciones de recursos".
+17. Intentar asignar `LAP-DEV-001` entre `2026-08-01` y `2026-08-05` muestra conflicto.
 
 ## Evidencia sugerida
 
@@ -100,6 +113,7 @@ Guardar capturas reales de:
 - Gantt.
 - Semaforo verde, amarillo y rojo.
 - Reporte financiero.
+- Reporte de utilizacion de recursos.
 - Exportacion PDF o Excel descargada.
 
 No usar capturas inventadas.

@@ -60,6 +60,15 @@ export class DashboardReportResponseDto {
   @ApiProperty({ example: 7 })
   visibleMembers!: number;
 
+  @ApiProperty({ example: 18 })
+  operationalResources!: number;
+
+  @ApiProperty({ example: 6 })
+  currentlyAssignedResources!: number;
+
+  @ApiProperty({ example: 2 })
+  resourcesInMaintenance!: number;
+
   @ApiProperty({ example: '52.50' })
   averageProgress!: string;
 

@@ -73,6 +73,7 @@ export class ReportsService {
     const workload = await this.getWorkloadForProjects(projectUuids);
     const visibleMembers = await this.countVisibleMembers(projectUuids);
     const today = getTodayInLaPaz();
+    const resourceMetrics = await this.getDashboardResourceMetrics(projectUuids, today);
     const tasksByProjectUuid = groupByProjectUuid(tasks);
     const projectSummaries = projects.map((project) =>
       this.buildDashboardProjectSummary(project, tasksByProjectUuid.get(project.uuid) ?? [], today),
@@ -82,6 +83,9 @@ export class ReportsService {
       activeProjects,
       pendingTasks,
       visibleMembers,
+      operationalResources: resourceMetrics.operationalResources,
+      currentlyAssignedResources: resourceMetrics.currentlyAssignedResources,
+      resourcesInMaintenance: resourceMetrics.resourcesInMaintenance,
       averageProgress: calculateAverageProgress(activeTasks),
       projectSummaries,
       upcomingMilestones: this.buildUpcomingMilestones(projects, tasks, today),
@@ -301,7 +305,10 @@ export class ReportsService {
     return tasks.filter((task) => assignedTaskUuids.has(task.uuid));
   }
 
-  private findVisibleProjectTasks(project: Project, currentUser: AuthenticatedUser): Promise<Task[]> {
+  private findVisibleProjectTasks(
+    project: Project,
+    currentUser: AuthenticatedUser,
+  ): Promise<Task[]> {
     return this.findVisibleTasks([project], currentUser);
   }
 
@@ -317,7 +324,10 @@ export class ReportsService {
       return;
     }
 
-    if (currentUser.role === UserRole.USER && (await this.isProjectMember(project.uuid, currentUser.uuid))) {
+    if (
+      currentUser.role === UserRole.USER &&
+      (await this.isProjectMember(project.uuid, currentUser.uuid))
+    ) {
       return;
     }
 
@@ -329,7 +339,9 @@ export class ReportsService {
       return;
     }
 
-    throw new ForbiddenException('No tiene permiso para consultar informacion financiera del proyecto.');
+    throw new ForbiddenException(
+      'No tiene permiso para consultar informacion financiera del proyecto.',
+    );
   }
 
   private canViewFinancials(project: Project, currentUser: AuthenticatedUser): boolean {
@@ -357,6 +369,51 @@ export class ReportsService {
     });
 
     return new Set(members.map((member) => member.userUuid)).size;
+  }
+
+  private async getDashboardResourceMetrics(
+    projectUuids: readonly string[],
+    today: string,
+  ): Promise<DashboardResourceMetrics> {
+    if (projectUuids.length === 0) {
+      return {
+        operationalResources: 0,
+        currentlyAssignedResources: 0,
+        resourcesInMaintenance: 0,
+      };
+    }
+
+    const assignments = await this.resourceAssignmentsRepository.find({
+      where: { projectUuid: In([...projectUuids]) },
+      relations: { resource: true },
+    });
+    const operationalResourceUuids = new Set<string>();
+    const currentlyAssignedResourceUuids = new Set<string>();
+    const maintenanceResourceUuids = new Set<string>();
+
+    assignments.forEach((assignment) => {
+      if (assignment.resource.deletedAt !== null || !assignment.resource.isActive) {
+        return;
+      }
+
+      if (assignment.resource.operationalStatus === ResourceOperationalStatus.OPERATIONAL) {
+        operationalResourceUuids.add(assignment.resourceUuid);
+      }
+
+      if (assignment.resource.operationalStatus === ResourceOperationalStatus.MAINTENANCE) {
+        maintenanceResourceUuids.add(assignment.resourceUuid);
+      }
+
+      if (assignment.startDate <= today && assignment.endDate >= today) {
+        currentlyAssignedResourceUuids.add(assignment.resourceUuid);
+      }
+    });
+
+    return {
+      operationalResources: operationalResourceUuids.size,
+      currentlyAssignedResources: currentlyAssignedResourceUuids.size,
+      resourcesInMaintenance: maintenanceResourceUuids.size,
+    };
   }
 
   private async getWorkloadForProjects(
@@ -475,7 +532,9 @@ export class ReportsService {
       status: project.status,
       startDate: project.startDate,
       endDate: project.endDate,
-      progressPercentage: calculateAverageProgress(tasks.filter((task) => task.status !== TaskStatus.CANCELLED)),
+      progressPercentage: calculateAverageProgress(
+        tasks.filter((task) => task.status !== TaskStatus.CANCELLED),
+      ),
       trafficLight: calculation.color,
     };
   }
@@ -492,7 +551,9 @@ export class ReportsService {
       .sort((firstTask, secondTask) => {
         const endDateComparison = firstTask.endDate.localeCompare(secondTask.endDate);
 
-        return endDateComparison === 0 ? firstTask.name.localeCompare(secondTask.name) : endDateComparison;
+        return endDateComparison === 0
+          ? firstTask.name.localeCompare(secondTask.name)
+          : endDateComparison;
       })
       .slice(0, 6)
       .map((task) => ({
@@ -585,7 +646,8 @@ function buildResourceUtilizationSummary(
   >();
 
   assignments.forEach((assignment) => {
-    const resourceUuids = resourceUuidsByCategory.get(assignment.resourceCategory) ?? new Set<string>();
+    const resourceUuids =
+      resourceUuidsByCategory.get(assignment.resourceCategory) ?? new Set<string>();
     resourceUuids.add(assignment.resourceUuid);
     resourceUuidsByCategory.set(assignment.resourceCategory, resourceUuids);
   });
@@ -656,6 +718,12 @@ interface FlattenedGanttTask {
   level: number;
 }
 
+interface DashboardResourceMetrics {
+  operationalResources: number;
+  currentlyAssignedResources: number;
+  resourcesInMaintenance: number;
+}
+
 function flattenGanttTasks(tasks: readonly Task[]): FlattenedGanttTask[] {
   const childrenByParentUuid = new Map<string | null, Task[]>();
 
@@ -669,7 +737,9 @@ function flattenGanttTasks(tasks: readonly Task[]): FlattenedGanttTask[] {
     siblings.sort((firstTask, secondTask) => {
       const startComparison = firstTask.startDate.localeCompare(secondTask.startDate);
 
-      return startComparison === 0 ? firstTask.name.localeCompare(secondTask.name) : startComparison;
+      return startComparison === 0
+        ? firstTask.name.localeCompare(secondTask.name)
+        : startComparison;
     });
   });
 

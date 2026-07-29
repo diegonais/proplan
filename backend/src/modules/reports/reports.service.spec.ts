@@ -140,6 +140,40 @@ describe('ReportsService', () => {
     );
   });
 
+  it('adds only aggregate resource metrics to the dashboard', async () => {
+    resourceAssignmentsRepository.setAssignments([
+      createResourceAssignment({
+        uuid: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+        resource: createResource({
+          uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+          code: 'LAP-001',
+          operationalStatus: ResourceOperationalStatus.OPERATIONAL,
+        }),
+        startDate: '2026-08-01',
+        endDate: '2026-08-10',
+      }),
+      createResourceAssignment({
+        uuid: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
+        resource: createResource({
+          uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+          code: 'SRV-001',
+          operationalStatus: ResourceOperationalStatus.MAINTENANCE,
+        }),
+        startDate: '2026-07-01',
+        endDate: '2026-07-10',
+      }),
+    ]);
+
+    const dashboard = await service.getDashboard(regularUser);
+
+    expect(dashboard).toMatchObject({
+      operationalResources: 1,
+      currentlyAssignedResources: 1,
+      resourcesInMaintenance: 1,
+    });
+    expect(dashboard).not.toHaveProperty('resourceUtilization');
+  });
+
   it('returns an empty resource utilization report when the project has no resources', async () => {
     const report = await service.getProjectResourceUtilization(project.uuid, managerUser);
 
@@ -419,7 +453,8 @@ function createResourceAssignment(overrides: Partial<ResourceAssignment>): Resou
     resource,
     project: overrides.project ?? createProject(),
     task: overrides.task ?? null,
-    assignedBy: overrides.assignedBy ?? createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, 'Jefe'),
+    assignedBy:
+      overrides.assignedBy ?? createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, 'Jefe'),
   };
 }
 
@@ -446,6 +481,38 @@ class InMemoryProjectsRepository {
         (project) => matchesWhere(project, options.where) && project.deletedAt === null,
       ) ?? null,
     );
+  }
+
+  createQueryBuilder(): InMemoryProjectsQueryBuilder {
+    return new InMemoryProjectsQueryBuilder(this.projects);
+  }
+}
+
+class InMemoryProjectsQueryBuilder {
+  constructor(private readonly projects: readonly Project[]) {}
+
+  leftJoinAndSelect(): this {
+    return this;
+  }
+
+  orderBy(): this {
+    return this;
+  }
+
+  addOrderBy(): this {
+    return this;
+  }
+
+  innerJoin(): this {
+    return this;
+  }
+
+  andWhere(): this {
+    return this;
+  }
+
+  getMany(): Promise<Project[]> {
+    return Promise.resolve(this.projects.filter((project) => project.deletedAt === null));
   }
 }
 
@@ -557,7 +624,9 @@ class InMemoryResourceAssignmentQueryBuilder {
             assignment.projectUuid === this.projectUuid && assignment.deletedAt === null,
         )
         .sort((firstAssignment, secondAssignment) => {
-          const startComparison = firstAssignment.startDate.localeCompare(secondAssignment.startDate);
+          const startComparison = firstAssignment.startDate.localeCompare(
+            secondAssignment.startDate,
+          );
 
           if (startComparison !== 0) {
             return startComparison;

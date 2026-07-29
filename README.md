@@ -1,6 +1,6 @@
 # PROPLAN
 
-PROPLAN es un sistema web de gestion y planificacion de proyectos. Permite administrar usuarios, proyectos, actividades, subactividades, dependencias, miembros, asignaciones, responsables principales, horas, presupuesto, costos ejecutados, reportes, Gantt y exportaciones.
+PROPLAN es un sistema web interno de LogistiSoft para gestionar y planificar proyectos de desarrollo de software orientados a logistica y transporte. Permite administrar usuarios, proyectos, actividades, subactividades, dependencias, miembros, asignaciones humanas, recursos no humanos, responsables principales, horas, presupuesto, costos ejecutados, reportes, Gantt y exportaciones.
 
 El proyecto esta preparado para una demostracion academica local con PostgreSQL, API NestJS, frontend React y datos ficticios idempotentes.
 
@@ -10,7 +10,7 @@ PROPLAN usa una arquitectura cliente-servidor:
 
 - Frontend: aplicacion React con TypeScript y Material UI.
 - Backend: API REST NestJS con TypeScript, Swagger, JWT, guards por rol y TypeORM.
-- Base de datos: PostgreSQL con migraciones, UUID y eliminacion logica en proyectos y actividades.
+- Base de datos: PostgreSQL con migraciones, UUID y eliminacion logica en proyectos, actividades, recursos y asignaciones de recursos.
 - Comunicacion: JSON sobre HTTP bajo el prefijo `http://localhost:3000/api/v1`.
 
 Estructura principal:
@@ -149,7 +149,7 @@ Tambien existe un seed minimo de administrador:
 npm run seed:initial-admin
 ```
 
-Para la presentacion se recomienda usar `seed:demo`, porque crea usuarios, proyectos, actividades, subactividades, dependencias, equipo, asignaciones, responsables principales, horas, presupuestos, costos y escenarios de semaforo.
+Para la presentacion se recomienda usar `seed:demo`, porque crea usuarios, proyectos, actividades, subactividades, dependencias, equipo, asignaciones humanas, recursos de LogistiSoft, asignaciones de recursos activas, programadas y finalizadas, responsables principales, horas, presupuestos, costos y escenarios de semaforo. El seed incluye el caso demostrable de conflicto de `LAP-DEV-001` entre `2026-08-01` y `2026-08-05`, sin insertar datos invalidos.
 
 ### 6. Iniciar el backend
 
@@ -268,6 +268,10 @@ http://localhost:3000/api/docs
 ```
 
 Usar `POST /api/v1/auth/login` para obtener el token y luego autorizar con Bearer token en Swagger.
+
+## Exportaciones
+
+Los reportes exportables de proyecto incluyen datos autorizados del proyecto, actividades, equipo, dependencias, presupuesto y recursos asignados. El PDF contiene la seccion "Recursos asignados" con codigo, nombre, categoria, estado operativo, proyecto, actividad opcional, fecha inicial, fecha final y estado temporal. El Excel agrega hojas "Recursos" y "Asignaciones de recursos"; los textos se sanitizan para evitar inyeccion de formulas y no se exponen campos sensibles como `passwordHash`.
 
 ## Politica UUID
 

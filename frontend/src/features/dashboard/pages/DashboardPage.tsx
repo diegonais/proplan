@@ -56,6 +56,9 @@ export function DashboardPage() {
       { label: 'Proyectos activos', value: report.activeProjects.toString() },
       { label: 'Actividades pendientes', value: report.pendingTasks.toString() },
       { label: 'Miembros visibles', value: report.visibleMembers.toString() },
+      { label: 'Recursos operativos', value: report.operationalResources.toString() },
+      { label: 'Recursos asignados ahora', value: report.currentlyAssignedResources.toString() },
+      { label: 'Recursos en mantenimiento', value: report.resourcesInMaintenance.toString() },
       { label: 'Avance promedio', value: formatPercentage(report.averageProgress) },
     ];
   }, [report]);
@@ -95,7 +98,11 @@ export function DashboardPage() {
             }}
           >
             {metrics.map((metric) => (
-              <Paper key={metric.label} elevation={0} sx={{ border: 1, borderColor: 'divider', p: 2 }}>
+              <Paper
+                key={metric.label}
+                elevation={0}
+                sx={{ border: 1, borderColor: 'divider', p: 2 }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   {metric.label}
                 </Typography>
@@ -104,7 +111,11 @@ export function DashboardPage() {
             ))}
           </Box>
 
-          <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+          <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{ border: 1, borderColor: 'divider' }}
+          >
             <Table aria-label="Resumen de proyectos">
               <TableHead>
                 <TableRow>
@@ -155,7 +166,11 @@ export function DashboardPage() {
           </TableContainer>
 
           <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' } }}>
-            <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{ border: 1, borderColor: 'divider' }}
+            >
               <Table aria-label="Proximos hitos">
                 <TableHead>
                   <TableRow>
@@ -170,7 +185,9 @@ export function DashboardPage() {
                     <TableRow>
                       <TableCell colSpan={4}>
                         <Box sx={{ py: 4, textAlign: 'center' }}>
-                          <Typography color="text.secondary">No hay hitos proximos derivados.</Typography>
+                          <Typography color="text.secondary">
+                            No hay hitos proximos derivados.
+                          </Typography>
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -188,7 +205,11 @@ export function DashboardPage() {
               </Table>
             </TableContainer>
 
-            <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{ border: 1, borderColor: 'divider' }}
+            >
               <Table aria-label="Carga de trabajo general">
                 <TableHead>
                   <TableRow>
@@ -201,7 +222,9 @@ export function DashboardPage() {
                     <TableRow>
                       <TableCell colSpan={2}>
                         <Box sx={{ py: 4, textAlign: 'center' }}>
-                          <Typography color="text.secondary">No hay carga de trabajo registrada.</Typography>
+                          <Typography color="text.secondary">
+                            No hay carga de trabajo registrada.
+                          </Typography>
                         </Box>
                       </TableCell>
                     </TableRow>

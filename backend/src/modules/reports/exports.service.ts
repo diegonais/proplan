@@ -8,13 +8,12 @@ import { TaskDependencyType } from '../../common/enums/task-dependency-type.enum
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
-import {
-  addMoney,
-  calculatePercentage,
-  subtractMoney,
-} from '../../common/utils/decimal-money';
+import { addMoney, calculatePercentage, subtractMoney } from '../../common/utils/decimal-money';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
+import { calculateTemporalStatus } from '../resource-assignments/dto/resource-assignment-response.dto';
+import { ResourceAssignmentTemporalStatus } from '../resource-assignments/dto/resource-assignment-temporal-status.enum';
+import { ResourceAssignment } from '../resource-assignments/entities/resource-assignment.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { Task } from '../tasks/entities/task.entity';
@@ -78,6 +77,30 @@ interface ExportDependency {
   dependencyType: TaskDependencyType;
 }
 
+interface ExportResource {
+  uuid: string;
+  code: string;
+  name: string;
+  category: string;
+  operationalStatus: string;
+  description: string | null;
+  serialNumber: string | null;
+  isActive: boolean;
+}
+
+interface ExportResourceAssignment {
+  uuid: string;
+  resourceUuid: string;
+  projectUuid: string;
+  taskUuid: string | null;
+  resource: ExportResource;
+  projectName: string;
+  taskName: string | null;
+  startDate: string;
+  endDate: string;
+  temporalStatus: ResourceAssignmentTemporalStatus;
+}
+
 interface ExportFinancialSummary {
   approvedBudget: string;
   distributedBudget: string;
@@ -93,6 +116,8 @@ interface ExportProjectData {
   members: ExportMember[];
   assignments: ExportAssignment[];
   dependencies: ExportDependency[];
+  resources: ExportResource[];
+  resourceAssignments: ExportResourceAssignment[];
   trafficLight: TrafficLightCalculation;
   progressPercentage: string;
   financialSummary: ExportFinancialSummary;
@@ -119,6 +144,8 @@ export class ExportsService {
     private readonly taskAssignmentsRepository: Repository<TaskAssignment>,
     @InjectRepository(ProjectMember)
     private readonly projectMembersRepository: Repository<ProjectMember>,
+    @InjectRepository(ResourceAssignment)
+    private readonly resourceAssignmentsRepository: Repository<ResourceAssignment>,
   ) {}
 
   async generateProjectPdf(
@@ -161,13 +188,15 @@ export class ExportsService {
       order: { startDate: 'ASC', endDate: 'ASC', name: 'ASC', uuid: 'ASC' },
     });
     const taskUuids = tasks.map((task) => task.uuid);
-    const [members, assignments, dependencies] = await Promise.all([
+    const generatedAt = new Date();
+    const today = getTodayInLaPaz(generatedAt);
+    const [members, assignments, dependencies, resourceAssignments] = await Promise.all([
       this.findProjectMembers(project.uuid),
       this.findTaskAssignments(taskUuids),
       this.findTaskDependencies(taskUuids),
+      this.findResourceAssignments(project.uuid, today),
     ]);
     const activeFinancialTasks = tasks.filter((task) => task.status !== TaskStatus.CANCELLED);
-    const generatedAt = new Date();
 
     return {
       project,
@@ -176,7 +205,9 @@ export class ExportsService {
       members,
       assignments,
       dependencies,
-      trafficLight: calculateTrafficLight(project, tasks, getTodayInLaPaz(generatedAt)),
+      resources: uniqueResources(resourceAssignments),
+      resourceAssignments,
+      trafficLight: calculateTrafficLight(project, tasks, today),
       progressPercentage: calculateAverageProgress(activeFinancialTasks),
       financialSummary: buildFinancialSummary(project, activeFinancialTasks),
       generatedAt,
@@ -266,12 +297,37 @@ export class ExportsService {
       dependencyType: dependency.dependencyType,
     }));
   }
+
+  private async findResourceAssignments(
+    projectUuid: string,
+    today: string,
+  ): Promise<ExportResourceAssignment[]> {
+    const assignments = await this.resourceAssignmentsRepository.find({
+      where: { projectUuid },
+      relations: { resource: true, project: true, task: true },
+      order: { startDate: 'ASC', endDate: 'ASC', uuid: 'ASC' },
+    });
+
+    return assignments.map((assignment) => ({
+      uuid: assignment.uuid,
+      resourceUuid: assignment.resourceUuid,
+      projectUuid: assignment.projectUuid,
+      taskUuid: assignment.taskUuid,
+      resource: mapResource(assignment),
+      projectName: assignment.project.name,
+      taskName: assignment.task?.name ?? null,
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      temporalStatus: calculateTemporalStatus(assignment.startDate, assignment.endDate, today),
+    }));
+  }
 }
 
 async function buildPdf(data: ExportProjectData): Promise<Buffer> {
   const document = new PdfDocument({
     size: 'A4',
     margin: 42,
+    compress: false,
     info: {
       Title: `Reporte PROPLAN - ${data.project.name}`,
       Author: 'PROPLAN',
@@ -293,7 +349,6 @@ async function buildPdf(data: ExportProjectData): Promise<Buffer> {
 
   addPdfHeader(document, data);
   addPdfSection(document, 'Proyecto', [
-    ['UUID', data.project.uuid],
     ['Nombre', data.project.name],
     ['Objetivo', data.project.objective],
     ['Descripcion', data.project.description ?? 'Sin descripcion'],
@@ -307,11 +362,12 @@ async function buildPdf(data: ExportProjectData): Promise<Buffer> {
     ['Estado', data.trafficLight.color],
     ['Razones', data.trafficLight.reasons.join('; ')],
   ]);
-  addPdfTable(document, 'Equipo', ['Nombre', 'Correo', 'Rol'], data.members.map((member) => [
-    member.user.name,
-    member.user.email,
-    member.user.role,
-  ]));
+  addPdfTable(
+    document,
+    'Equipo',
+    ['Nombre', 'Correo', 'Rol'],
+    data.members.map((member) => [member.user.name, member.user.email, member.user.role]),
+  );
   addPdfTable(
     document,
     'Actividades y subactividades',
@@ -332,6 +388,32 @@ async function buildPdf(data: ExportProjectData): Promise<Buffer> {
       getTaskName(dependency.predecessorTaskUuid, data.tasks),
       getTaskName(dependency.successorTaskUuid, data.tasks),
       dependency.dependencyType,
+    ]),
+  );
+  addPdfTable(
+    document,
+    'Recursos asignados',
+    [
+      'Codigo',
+      'Nombre',
+      'Categoria',
+      'Estado operativo',
+      'Proyecto',
+      'Actividad',
+      'Fecha inicial',
+      'Fecha final',
+      'Estado temporal',
+    ],
+    data.resourceAssignments.map((assignment) => [
+      assignment.resource.code,
+      assignment.resource.name,
+      assignment.resource.category,
+      assignment.resource.operationalStatus,
+      assignment.projectName,
+      assignment.taskName ?? 'Proyecto completo',
+      assignment.startDate,
+      assignment.endDate,
+      assignment.temporalStatus,
     ]),
   );
   addPdfSection(document, 'Resumen financiero', [
@@ -359,6 +441,8 @@ async function buildExcel(data: ExportProjectData): Promise<Buffer> {
   addTeamSheet(workbook, data);
   addBudgetSheet(workbook, data);
   addDependenciesSheet(workbook, data);
+  addResourcesSheet(workbook, data);
+  addResourceAssignmentsSheet(workbook, data);
 
   const workbookBuffer = await workbook.xlsx.writeBuffer();
 
@@ -497,7 +581,8 @@ function addBudgetSheet(workbook: ExcelJS.Workbook, data: ExportProjectData): vo
         plannedBudget: Number(task.plannedBudget),
         actualCost: Number(task.actualCost),
         variance: Number(subtractMoney(task.plannedBudget, task.actualCost)),
-        consumedPercentage: Number(calculatePercentage(task.actualCost, task.plannedBudget) ?? '0.00') / 100,
+        consumedPercentage:
+          Number(calculatePercentage(task.actualCost, task.plannedBudget) ?? '0.00') / 100,
         taskUuid: task.uuid,
       })),
   ]);
@@ -525,6 +610,72 @@ function addDependenciesSheet(workbook: ExcelJS.Workbook, data: ExportProjectDat
       dependencyType: dependency.dependencyType,
       predecessorTaskUuid: dependency.predecessorTaskUuid,
       successorTaskUuid: dependency.successorTaskUuid,
+    })),
+  );
+  formatHeader(worksheet);
+}
+
+function addResourcesSheet(workbook: ExcelJS.Workbook, data: ExportProjectData): void {
+  const worksheet = workbook.addWorksheet('Recursos');
+  worksheet.columns = [
+    { header: 'Codigo', key: 'code', width: 18 },
+    { header: 'Nombre', key: 'name', width: 34 },
+    { header: 'Categoria', key: 'category', width: 24 },
+    { header: 'Estado operativo', key: 'operationalStatus', width: 22 },
+    { header: 'Activo', key: 'isActive', width: 12 },
+    { header: 'Serie', key: 'serialNumber', width: 24 },
+    { header: 'Descripcion', key: 'description', width: 48 },
+    { header: 'Recurso UUID', key: 'resourceUuid', width: 38 },
+  ];
+  addRows(
+    worksheet,
+    data.resources.map((resource) => ({
+      code: resource.code,
+      name: resource.name,
+      category: resource.category,
+      operationalStatus: resource.operationalStatus,
+      isActive: resource.isActive ? 'Si' : 'No',
+      serialNumber: resource.serialNumber ?? '',
+      description: resource.description ?? '',
+      resourceUuid: resource.uuid,
+    })),
+  );
+  formatHeader(worksheet);
+}
+
+function addResourceAssignmentsSheet(workbook: ExcelJS.Workbook, data: ExportProjectData): void {
+  const worksheet = workbook.addWorksheet('Asignaciones de recursos');
+  worksheet.columns = [
+    { header: 'Codigo', key: 'code', width: 18 },
+    { header: 'Recurso', key: 'resource', width: 34 },
+    { header: 'Categoria', key: 'category', width: 24 },
+    { header: 'Estado operativo', key: 'operationalStatus', width: 22 },
+    { header: 'Proyecto', key: 'project', width: 36 },
+    { header: 'Actividad', key: 'task', width: 36 },
+    { header: 'Fecha inicial', key: 'startDate', width: 16 },
+    { header: 'Fecha final', key: 'endDate', width: 16 },
+    { header: 'Estado temporal', key: 'temporalStatus', width: 18 },
+    { header: 'Asignacion UUID', key: 'assignmentUuid', width: 38 },
+    { header: 'Recurso UUID', key: 'resourceUuid', width: 38 },
+    { header: 'Proyecto UUID', key: 'projectUuid', width: 38 },
+    { header: 'Actividad UUID', key: 'taskUuid', width: 38 },
+  ];
+  addRows(
+    worksheet,
+    data.resourceAssignments.map((assignment) => ({
+      code: assignment.resource.code,
+      resource: assignment.resource.name,
+      category: assignment.resource.category,
+      operationalStatus: assignment.resource.operationalStatus,
+      project: assignment.projectName,
+      task: assignment.taskName ?? '',
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      temporalStatus: assignment.temporalStatus,
+      assignmentUuid: assignment.uuid,
+      resourceUuid: assignment.resourceUuid,
+      projectUuid: assignment.projectUuid,
+      taskUuid: assignment.taskUuid ?? '',
     })),
   );
   formatHeader(worksheet);
@@ -667,6 +818,31 @@ function mapSafeUser(user: User): ExportUser {
   };
 }
 
+function mapResource(assignment: ResourceAssignment): ExportResource {
+  return {
+    uuid: assignment.resource.uuid,
+    code: assignment.resource.code,
+    name: assignment.resource.name,
+    category: assignment.resource.category,
+    operationalStatus: assignment.resource.operationalStatus,
+    description: assignment.resource.description,
+    serialNumber: assignment.resource.serialNumber,
+    isActive: assignment.resource.isActive,
+  };
+}
+
+function uniqueResources(assignments: readonly ExportResourceAssignment[]): ExportResource[] {
+  const resourcesByUuid = new Map<string, ExportResource>();
+
+  assignments.forEach((assignment) => {
+    resourcesByUuid.set(assignment.resource.uuid, assignment.resource);
+  });
+
+  return Array.from(resourcesByUuid.values()).sort((firstResource, secondResource) =>
+    firstResource.code.localeCompare(secondResource.code),
+  );
+}
+
 function buildFinancialSummary(project: Project, tasks: readonly Task[]): ExportFinancialSummary {
   const distributedBudget = addMoney(...tasks.map((task) => task.plannedBudget));
   const totalActualCost = addMoney(...tasks.map((task) => task.actualCost));
@@ -689,10 +865,7 @@ function calculateAverageProgress(tasks: readonly Task[]): string {
   return (tasks.reduce((total, task) => total + task.progress, 0) / tasks.length).toFixed(2);
 }
 
-function getResponsibleNames(
-  taskUuid: string,
-  assignments: readonly ExportAssignment[],
-): string {
+function getResponsibleNames(taskUuid: string, assignments: readonly ExportAssignment[]): string {
   const taskAssignments = assignments.filter((assignment) => assignment.taskUuid === taskUuid);
 
   if (taskAssignments.length === 0) {
