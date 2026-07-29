@@ -451,7 +451,7 @@ export class ResourceAssignmentsService {
     const queryBuilder = entityManager
       .getRepository(ResourceAssignment)
       .createQueryBuilder('assignment')
-      .setLock('pessimistic_write')
+      .setLock('pessimistic_write', undefined, ['assignment'])
       .innerJoinAndSelect('assignment.project', 'project')
       .leftJoinAndSelect('assignment.task', 'task')
       .where('assignment.resourceUuid = :resourceUuid', { resourceUuid: resource.uuid })

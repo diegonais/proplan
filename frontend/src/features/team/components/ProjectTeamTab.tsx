@@ -249,10 +249,10 @@ export function ProjectTeamTab({ project, canManage }: ProjectTeamTabProps) {
       </TableContainer>
 
       <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-        <Table aria-label="Carga de trabajo por recurso">
+        <Table aria-label="Carga de trabajo por persona">
           <TableHead>
             <TableRow>
-              <TableCell>Recurso</TableCell>
+              <TableCell>Persona</TableCell>
               <TableCell>Rol general</TableCell>
               <TableCell align="right">Horas asignadas</TableCell>
             </TableRow>

@@ -99,7 +99,7 @@ export class ProjectMembersController {
   }
 
   @Get('projects/:projectUuid/workload')
-  @ApiOperation({ summary: 'Consultar carga de trabajo por recurso como suma de horas asignadas.' })
+  @ApiOperation({ summary: 'Consultar carga de trabajo por persona como suma de horas asignadas.' })
   @ApiOkResponse({ type: [WorkloadItemResponseDto] })
   getWorkload(
     @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
