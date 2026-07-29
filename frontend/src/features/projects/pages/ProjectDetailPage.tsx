@@ -1,4 +1,5 @@
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
+import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import {
@@ -22,8 +23,6 @@ import { formatMoney } from '../../../utils/money';
 import { useAuth } from '../../auth/authContext';
 import { ProjectTeamTab } from '../../team/components/ProjectTeamTab';
 import { ProjectTasksTab } from '../../tasks/components/ProjectTasksTab';
-import { ProjectGanttTab } from '../../reports/components/ProjectGanttTab';
-import { ProjectReportsTab } from '../../reports/components/ProjectReportsTab';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectBudgetTab } from '../components/ProjectBudgetTab';
 import { ProjectStatusChip } from '../components/ProjectStatusChip';
@@ -131,6 +130,13 @@ export function ProjectDetailPage() {
           <Button component={Link} to="/projects" startIcon={<ArrowBackOutlinedIcon />}>
             Volver
           </Button>
+          <Button
+            component={Link}
+            to={`/reports?projectUuid=${project.uuid}`}
+            startIcon={<AssessmentOutlinedIcon />}
+          >
+            Ver reportes
+          </Button>
           {canManageProject ? (
             <>
               <Button component={Link} to={`/projects/${project.uuid}/edit`} startIcon={<EditOutlinedIcon />}>
@@ -162,10 +168,8 @@ export function ProjectDetailPage() {
         >
           <Tab label="Resumen" />
           <Tab label="Actividades" />
-          <Tab label="Gantt" />
           <Tab label="Equipo" />
-          {canManageProject ? <Tab label="Presupuesto" /> : null}
-          <Tab label="Reportes" />
+          {canManageProject ? <Tab label="Presupuesto y costos" /> : null}
         </Tabs>
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
           {selectedTab === 0 ? (
@@ -225,12 +229,9 @@ export function ProjectDetailPage() {
             <ProjectTasksTab project={project} canManage={canManageProject} />
           ) : null}
           {selectedTab === 2 ? (
-            <ProjectGanttTab project={project} />
-          ) : null}
-          {selectedTab === 3 ? (
             <ProjectTeamTab project={project} canManage={canManageProject} />
           ) : null}
-          {selectedTab === 4 && canManageProject ? (
+          {selectedTab === 3 && canManageProject ? (
             <ProjectBudgetTab
               project={project}
               canManage={canManageProject}
@@ -238,9 +239,6 @@ export function ProjectDetailPage() {
                 setProject(updatedProject);
               }}
             />
-          ) : null}
-          {selectedTab === (canManageProject ? 5 : 4) ? (
-            <ProjectReportsTab project={project} canViewFinancialDetails={canManageProject} />
           ) : null}
         </Box>
       </Paper>

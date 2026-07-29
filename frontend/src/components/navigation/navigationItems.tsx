@@ -1,18 +1,18 @@
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
-import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
-import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { ReactNode } from 'react';
 
 import { UserRole } from '../../features/auth/types';
 
 export interface NavigationItem {
   label: string;
-  path: string;
+  path?: string;
   icon: ReactNode;
   allowedRoles?: readonly UserRole[];
+  disabled?: boolean;
 }
 
 export const navigationItems: readonly NavigationItem[] = [
@@ -27,14 +27,9 @@ export const navigationItems: readonly NavigationItem[] = [
     icon: <FolderOutlinedIcon aria-hidden="true" />,
   },
   {
-    label: 'Actividades',
-    path: '/tasks',
-    icon: <AssignmentOutlinedIcon aria-hidden="true" />,
-  },
-  {
-    label: 'Equipo',
-    path: '/team',
-    icon: <GroupsOutlinedIcon aria-hidden="true" />,
+    label: 'Recursos',
+    icon: <Inventory2OutlinedIcon aria-hidden="true" />,
+    disabled: true,
   },
   {
     label: 'Reportes',

@@ -56,13 +56,19 @@ export function AuthenticatedLayout() {
       <List component="nav" aria-label="Navegación principal" sx={{ px: 1, py: 1.5 }}>
         {authorizedItems.map((item) => {
           const isSelected =
-            location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+            item.path !== undefined &&
+            (location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
 
           return (
-            <ListItem disablePadding key={item.path} sx={{ mb: 0.5 }}>
+            <ListItem disablePadding key={item.label} sx={{ mb: 0.5 }}>
               <ListItemButton
-                component={Link}
-                to={item.path}
+                {...(item.path !== undefined && !item.disabled
+                  ? {
+                      component: Link,
+                      to: item.path,
+                    }
+                  : {})}
+                disabled={item.disabled}
                 selected={isSelected}
                 onClick={() => {
                   setIsMobileDrawerOpen(false);

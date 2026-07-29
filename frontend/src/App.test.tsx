@@ -286,7 +286,43 @@ describe('App authentication flow', () => {
 
     expect(await screen.findByRole('heading', { name: 'Panel general' })).toBeInTheDocument();
     expect(screen.getByText('Proyectos')).toBeInTheDocument();
+    expect(screen.getByText('Recursos')).toBeInTheDocument();
+    expect(screen.getByText('Reportes')).toBeInTheDocument();
+    expect(screen.queryByText('Actividades')).not.toBeInTheDocument();
+    expect(screen.queryByText('Equipo')).not.toBeInTheDocument();
     expect(screen.queryByText('Administración de usuarios')).not.toBeInTheDocument();
+  });
+
+  it('shows the definitive menu for administrators', async () => {
+    window.localStorage.setItem('proplan.accessToken', 'stored-token');
+    window.history.pushState({}, '', '/dashboard');
+    installHttpMock([createMeRoute(adminUser)]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Panel general' })).toBeInTheDocument();
+    expect(screen.getByText('Proyectos')).toBeInTheDocument();
+    expect(screen.getByText('Recursos')).toBeInTheDocument();
+    expect(screen.getByText('Reportes')).toBeInTheDocument();
+    expect(screen.getByText('Administración de usuarios')).toBeInTheDocument();
+    expect(screen.queryByText('Actividades')).not.toBeInTheDocument();
+    expect(screen.queryByText('Equipo')).not.toBeInTheDocument();
+  });
+
+  it('shows the definitive menu for project managers', async () => {
+    window.localStorage.setItem('proplan.accessToken', 'stored-token');
+    window.history.pushState({}, '', '/dashboard');
+    installHttpMock([createMeRoute(projectManagerUser)]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Panel general' })).toBeInTheDocument();
+    expect(screen.getByText('Proyectos')).toBeInTheDocument();
+    expect(screen.getByText('Recursos')).toBeInTheDocument();
+    expect(screen.getByText('Reportes')).toBeInTheDocument();
+    expect(screen.queryByText('Administración de usuarios')).not.toBeInTheDocument();
+    expect(screen.queryByText('Actividades')).not.toBeInTheDocument();
+    expect(screen.queryByText('Equipo')).not.toBeInTheDocument();
   });
 
   it('shows an unauthorized state for restricted routes', async () => {
@@ -620,17 +656,95 @@ describe('Project detail behavior', () => {
     expect(screen.queryByLabelText('Eliminar actividad')).not.toBeInTheDocument();
   });
 
-  it('shows empty report states and hides downloads from regular users', async () => {
+  it('keeps team management inside the project detail', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createProjectMembersRoute([]),
+      createProjectWorkloadRoute([]),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Equipo' }));
+
+    expect(await screen.findByText('No hay miembros registrados.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Agregar miembro' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Reportes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Gantt' })).not.toBeInTheDocument();
+  });
+
+  it('opens the main reports module from project detail', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createProjectsListRoute([sampleProject]),
+      createGanttReportRoute(),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Ver reportes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/reports');
+      expect(window.location.search).toBe(`?projectUuid=${sampleProject.uuid}`);
+    });
+  });
+});
+
+describe('Reports module', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('proplan.accessToken', 'stored-token');
+    window.history.pushState({}, '', '/reports');
+    installHttpMock([]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetHttpMock();
+    vi.restoreAllMocks();
+  });
+
+  it('shows the authorized project selector and loads Gantt after selecting a project', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectsListRoute([sampleProject]),
+      createGanttReportRoute(),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Proyecto' }));
+    fireEvent.click(await screen.findByRole('option', { name: sampleProject.name }));
+
+    expect(await screen.findByRole('heading', { name: 'Diagrama de Gantt' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'GET' &&
+            requestEntry.url === `/projects/${sampleProject.uuid}/reports/gantt`,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('opens reports from projectUuid and keeps financial details hidden for regular users', async () => {
+    window.history.pushState({}, '', `/reports?projectUuid=${sampleProject.uuid}`);
     installHttpMock([
       createMeRoute(standardUser),
-      createProjectDetailRoute(),
+      createProjectsListRoute([sampleProject]),
+      createGanttReportRoute(),
       createStatusReportRoute(),
       createWorkloadReportRoute([]),
     ]);
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Reportes' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Indicadores y exportaciones' }));
 
     expect(await screen.findByText('No hay horas asignadas.')).toBeInTheDocument();
     expect(screen.getByText('No hay actividades vencidas.')).toBeInTheDocument();
@@ -642,6 +756,7 @@ describe('Project detail behavior', () => {
   });
 
   it('downloads PDF and Excel exports for project managers', async () => {
+    window.history.pushState({}, '', `/reports?projectUuid=${sampleProject.uuid}`);
     if (!('createObjectURL' in URL)) {
       Object.defineProperty(URL, 'createObjectURL', {
         configurable: true,
@@ -662,7 +777,8 @@ describe('Project detail behavior', () => {
 
     installHttpMock([
       createMeRoute(projectManagerUser),
-      createProjectDetailRoute(),
+      createProjectsListRoute([sampleProject]),
+      createGanttReportRoute(),
       createStatusReportRoute(),
       createWorkloadReportRoute([
         {
@@ -684,7 +800,7 @@ describe('Project detail behavior', () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Reportes' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Indicadores y exportaciones' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Exportar PDF' }));
 
     await waitFor(() => {
@@ -872,6 +988,59 @@ function createTasksRoute(tasks: unknown[]) {
     response: {
       status: 200,
       data: tasks,
+    },
+  };
+}
+
+function createProjectMembersRoute(members: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/members`,
+    response: {
+      status: 200,
+      data: members,
+    },
+  };
+}
+
+function createProjectWorkloadRoute(workload: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/workload`,
+    response: {
+      status: 200,
+      data: workload,
+    },
+  };
+}
+
+function createGanttReportRoute() {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/reports/gantt`,
+    response: {
+      status: 200,
+      data: {
+        projectUuid: sampleProject.uuid,
+        projectName: sampleProject.name,
+        projectStartDate: sampleProject.startDate,
+        projectEndDate: sampleProject.endDate,
+        datePolicy: 'Las fechas se presentan como YYYY-MM-DD.',
+        tasks: [
+          {
+            uuid: sampleTask.uuid,
+            projectUuid: sampleProject.uuid,
+            parentTaskUuid: null,
+            name: sampleTask.name,
+            startDate: sampleTask.startDate,
+            endDate: sampleTask.endDate,
+            status: sampleTask.status,
+            progress: sampleTask.progress,
+            level: 0,
+          },
+        ],
+        dependencies: [],
+      },
     },
   };
 }
