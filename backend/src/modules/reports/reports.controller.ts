@@ -20,6 +20,7 @@ import { ProjectFinancialSummaryResponseDto } from '../finances/dto/financial-su
 import { DashboardReportResponseDto } from './dto/dashboard-report-response.dto';
 import { GanttReportResponseDto } from './dto/gantt-report-response.dto';
 import { ProjectStatusReportResponseDto } from './dto/project-status-report-response.dto';
+import { ResourceUtilizationReportResponseDto } from './dto/resource-utilization-report-response.dto';
 import {
   TrafficLightReportResponseDto,
   WorkloadReportItemResponseDto,
@@ -59,7 +60,7 @@ export class ReportsController {
   }
 
   @Get('projects/:projectUuid/reports/workload')
-  @ApiOperation({ summary: 'Consultar carga de trabajo por recurso del proyecto.' })
+  @ApiOperation({ summary: 'Consultar carga de trabajo humana por persona del proyecto.' })
   @ApiOkResponse({ type: [WorkloadReportItemResponseDto] })
   @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
   getProjectWorkload(
@@ -67,6 +68,17 @@ export class ReportsController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ): Promise<WorkloadReportItemResponseDto[]> {
     return this.reportsService.getProjectWorkload(projectUuid, currentUser);
+  }
+
+  @Get('projects/:projectUuid/reports/resource-utilization')
+  @ApiOperation({ summary: 'Consultar utilizacion de recursos no humanos del proyecto.' })
+  @ApiOkResponse({ type: ResourceUtilizationReportResponseDto })
+  @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
+  getProjectResourceUtilization(
+    @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<ResourceUtilizationReportResponseDto> {
+    return this.reportsService.getProjectResourceUtilization(projectUuid, currentUser);
   }
 
   @Get('projects/:projectUuid/reports/budget')

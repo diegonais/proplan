@@ -3,12 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 
 import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { ResourceOperationalStatus } from '../../common/enums/resource-operational-status.enum';
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectFinancialSummaryResponseDto } from '../finances/dto/financial-summary-response.dto';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
+import { calculateTemporalStatus } from '../resource-assignments/dto/resource-assignment-response.dto';
+import { ResourceAssignmentTemporalStatus } from '../resource-assignments/dto/resource-assignment-temporal-status.enum';
+import { ResourceAssignment } from '../resource-assignments/entities/resource-assignment.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { Task } from '../tasks/entities/task.entity';
@@ -25,6 +29,11 @@ import {
   ProjectStatusReportResponseDto,
   TaskStatusCountResponseDto,
 } from './dto/project-status-report-response.dto';
+import {
+  ResourceCurrentAvailabilityStatus,
+  ResourceUtilizationAssignmentResponseDto,
+  ResourceUtilizationReportResponseDto,
+} from './dto/resource-utilization-report-response.dto';
 import {
   TrafficLightReportResponseDto,
   WorkloadReportItemResponseDto,
@@ -48,6 +57,8 @@ export class ReportsService {
     private readonly taskAssignmentsRepository: Repository<TaskAssignment>,
     @InjectRepository(ProjectMember)
     private readonly projectMembersRepository: Repository<ProjectMember>,
+    @InjectRepository(ResourceAssignment)
+    private readonly resourceAssignmentsRepository: Repository<ResourceAssignment>,
   ) {}
 
   async getDashboard(currentUser: AuthenticatedUser): Promise<DashboardReportResponseDto> {
@@ -134,6 +145,48 @@ export class ReportsService {
     await this.ensureCanAccessProject(project, currentUser);
 
     return this.getWorkloadForProjects([project.uuid]);
+  }
+
+  async getProjectResourceUtilization(
+    projectUuid: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<ResourceUtilizationReportResponseDto> {
+    const project = await this.findActiveProjectOrFail(projectUuid);
+    await this.ensureCanAccessProject(project, currentUser);
+    const today = getTodayInLaPaz();
+    const assignments = await this.resourceAssignmentsRepository
+      .createQueryBuilder('assignment')
+      .withDeleted()
+      .innerJoinAndSelect('assignment.resource', 'resource')
+      .innerJoinAndSelect('assignment.project', 'project')
+      .leftJoinAndSelect('assignment.task', 'task')
+      .where('assignment.projectUuid = :projectUuid', { projectUuid: project.uuid })
+      .andWhere('assignment.deletedAt IS NULL')
+      .orderBy('assignment.startDate', 'ASC')
+      .addOrderBy('assignment.endDate', 'ASC')
+      .addOrderBy('resource.code', 'ASC')
+      .getMany();
+    const activeResourceUuids = await this.findCurrentlyAssignedResourceUuids(
+      assignments.map((assignment) => assignment.resourceUuid),
+      today,
+    );
+    const reportAssignments = assignments.map((assignment) =>
+      this.mapResourceUtilizationAssignment(assignment, today, activeResourceUuids),
+    );
+
+    return {
+      project: {
+        uuid: project.uuid,
+        name: project.name,
+        status: project.status,
+        startDate: project.startDate,
+        endDate: project.endDate,
+      },
+      datePolicy: 'Las fechas se exponen como YYYY-MM-DD sin conversion de zona horaria.',
+      today,
+      summary: buildResourceUtilizationSummary(reportAssignments),
+      assignments: reportAssignments,
+    };
   }
 
   async getProjectBudget(
@@ -356,6 +409,59 @@ export class ReportsService {
     }));
   }
 
+  private async findCurrentlyAssignedResourceUuids(
+    resourceUuids: readonly string[],
+    today: string,
+  ): Promise<Set<string>> {
+    const uniqueResourceUuids = Array.from(new Set(resourceUuids));
+
+    if (uniqueResourceUuids.length === 0) {
+      return new Set();
+    }
+
+    const activeAssignments = await this.resourceAssignmentsRepository.find({
+      select: { resourceUuid: true, startDate: true, endDate: true },
+      where: {
+        resourceUuid: In(uniqueResourceUuids),
+      },
+    });
+
+    return new Set(
+      activeAssignments
+        .filter((assignment) => assignment.startDate <= today && assignment.endDate >= today)
+        .map((assignment) => assignment.resourceUuid),
+    );
+  }
+
+  private mapResourceUtilizationAssignment(
+    assignment: ResourceAssignment,
+    today: string,
+    activeResourceUuids: ReadonlySet<string>,
+  ): ResourceUtilizationAssignmentResponseDto {
+    return {
+      uuid: assignment.uuid,
+      projectUuid: assignment.projectUuid,
+      resourceUuid: assignment.resourceUuid,
+      resourceName: assignment.resource.name,
+      resourceCode: assignment.resource.code,
+      resourceCategory: assignment.resource.category,
+      operationalStatus: assignment.resource.operationalStatus,
+      task:
+        assignment.task === null
+          ? null
+          : {
+              uuid: assignment.task.uuid,
+              name: assignment.task.name,
+            },
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      temporalStatus: calculateTemporalStatus(assignment.startDate, assignment.endDate, today),
+      assignedDays: calculateInclusiveDateDays(assignment.startDate, assignment.endDate),
+      currentAvailability: resolveCurrentAvailability(assignment, activeResourceUuids),
+      authorizedNotes: assignment.notes,
+    };
+  }
+
   private buildDashboardProjectSummary(
     project: Project,
     tasks: readonly Task[],
@@ -468,6 +574,81 @@ function groupByProjectUuid(tasks: readonly Task[]): Map<string, Task[]> {
   });
 
   return groupedTasks;
+}
+
+function buildResourceUtilizationSummary(
+  assignments: readonly ResourceUtilizationAssignmentResponseDto[],
+): ResourceUtilizationReportResponseDto['summary'] {
+  const resourceUuidsByCategory = new Map<
+    ResourceUtilizationAssignmentResponseDto['resourceCategory'],
+    Set<string>
+  >();
+
+  assignments.forEach((assignment) => {
+    const resourceUuids = resourceUuidsByCategory.get(assignment.resourceCategory) ?? new Set<string>();
+    resourceUuids.add(assignment.resourceUuid);
+    resourceUuidsByCategory.set(assignment.resourceCategory, resourceUuids);
+  });
+
+  return {
+    totalAssignedResources: new Set(assignments.map((assignment) => assignment.resourceUuid)).size,
+    activeAssignments: assignments.filter(
+      (assignment) => assignment.temporalStatus === ResourceAssignmentTemporalStatus.ACTIVE,
+    ).length,
+    scheduledAssignments: assignments.filter(
+      (assignment) => assignment.temporalStatus === ResourceAssignmentTemporalStatus.SCHEDULED,
+    ).length,
+    finishedAssignments: assignments.filter(
+      (assignment) => assignment.temporalStatus === ResourceAssignmentTemporalStatus.FINISHED,
+    ).length,
+    resourcesByCategory: Array.from(resourceUuidsByCategory.entries())
+      .map(([category, resourceUuids]) => ({
+        category,
+        count: resourceUuids.size,
+      }))
+      .sort((firstCategory, secondCategory) =>
+        firstCategory.category.localeCompare(secondCategory.category),
+      ),
+  };
+}
+
+function resolveCurrentAvailability(
+  assignment: ResourceAssignment,
+  activeResourceUuids: ReadonlySet<string>,
+): ResourceCurrentAvailabilityStatus {
+  if (assignment.resource.deletedAt !== null) {
+    return ResourceCurrentAvailabilityStatus.DELETED;
+  }
+
+  if (
+    !assignment.resource.isActive ||
+    assignment.resource.operationalStatus !== ResourceOperationalStatus.OPERATIONAL
+  ) {
+    return ResourceCurrentAvailabilityStatus.UNAVAILABLE;
+  }
+
+  if (activeResourceUuids.has(assignment.resourceUuid)) {
+    return ResourceCurrentAvailabilityStatus.ASSIGNED;
+  }
+
+  return ResourceCurrentAvailabilityStatus.AVAILABLE;
+}
+
+function calculateInclusiveDateDays(startDate: string, endDate: string): number {
+  const startTime = parseDateOnlyUtcNoon(startDate).getTime();
+  const endTime = parseDateOnlyUtcNoon(endDate).getTime();
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+  return Math.floor((endTime - startTime) / millisecondsPerDay) + 1;
+}
+
+function parseDateOnlyUtcNoon(value: string): Date {
+  const [yearText, monthText, dayText] = value.split('-');
+  const year = Number.parseInt(yearText ?? '', 10);
+  const month = Number.parseInt(monthText ?? '', 10);
+  const day = Number.parseInt(dayText ?? '', 10);
+
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 }
 
 interface FlattenedGanttTask {

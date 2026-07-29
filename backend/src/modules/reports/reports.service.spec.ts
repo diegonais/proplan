@@ -2,12 +2,17 @@ import { ForbiddenException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 
 import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { ResourceCategory } from '../../common/enums/resource-category.enum';
+import { ResourceOperationalStatus } from '../../common/enums/resource-operational-status.enum';
 import { TaskDependencyType } from '../../common/enums/task-dependency-type.enum';
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
+import { ResourceAssignmentTemporalStatus } from '../resource-assignments/dto/resource-assignment-temporal-status.enum';
+import { ResourceAssignment } from '../resource-assignments/entities/resource-assignment.entity';
+import { Resource } from '../resources/entities/resource.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { Task } from '../tasks/entities/task.entity';
@@ -32,6 +37,7 @@ describe('ReportsService', () => {
   let dependenciesRepository: InMemoryTaskDependenciesRepository;
   let assignmentsRepository: InMemoryTaskAssignmentsRepository;
   let membersRepository: InMemoryProjectMembersRepository;
+  let resourceAssignmentsRepository: InMemoryResourceAssignmentsRepository;
   let service: ReportsService;
   let project: Project;
   let parentTask: Task;
@@ -63,13 +69,20 @@ describe('ReportsService', () => {
       createMember(project.uuid, managerUser.uuid),
       createMember(project.uuid, regularUser.uuid),
     ]);
+    resourceAssignmentsRepository = new InMemoryResourceAssignmentsRepository([]);
     service = new ReportsService(
       projectsRepository as unknown as Repository<Project>,
       tasksRepository as unknown as Repository<Task>,
       dependenciesRepository as unknown as Repository<TaskDependency>,
       assignmentsRepository as unknown as Repository<TaskAssignment>,
       membersRepository as unknown as Repository<ProjectMember>,
+      resourceAssignmentsRepository as unknown as Repository<ResourceAssignment>,
     );
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000-04:00'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('returns Gantt dates unchanged and includes parent child levels and finish to start dependencies', async () => {
@@ -125,6 +138,142 @@ describe('ReportsService', () => {
         assignedHours: '8.50',
       }),
     );
+  });
+
+  it('returns an empty resource utilization report when the project has no resources', async () => {
+    const report = await service.getProjectResourceUtilization(project.uuid, managerUser);
+
+    expect(report.project).toMatchObject({
+      uuid: project.uuid,
+      name: project.name,
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    });
+    expect(report.today).toBe('2026-08-03');
+    expect(report.summary).toEqual({
+      totalAssignedResources: 0,
+      activeAssignments: 0,
+      scheduledAssignments: 0,
+      finishedAssignments: 0,
+      resourcesByCategory: [],
+    });
+    expect(report.assignments).toEqual([]);
+  });
+
+  it('reports active scheduled finished task-linked and deleted-resource utilization without human hours', async () => {
+    const activeResource = createResource({
+      uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+      code: 'LAP-001',
+      category: ResourceCategory.LAPTOP,
+    });
+    const futureResource = createResource({
+      uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+      code: 'LIC-001',
+      category: ResourceCategory.SOFTWARE_LICENSE,
+    });
+    const deletedResource = createResource({
+      uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3',
+      code: 'GPS-001',
+      category: ResourceCategory.MOBILE_DEVICE,
+      deletedAt: new Date('2026-08-02T12:00:00.000Z'),
+    });
+    resourceAssignmentsRepository.setAssignments([
+      createResourceAssignment({
+        uuid: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+        resource: activeResource,
+        startDate: '2026-08-01',
+        endDate: '2026-08-03',
+        task: parentTask,
+        notes: 'Uso autorizado en pruebas.',
+      }),
+      createResourceAssignment({
+        uuid: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
+        resource: futureResource,
+        startDate: '2026-08-10',
+        endDate: '2026-08-12',
+      }),
+      createResourceAssignment({
+        uuid: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3',
+        resource: deletedResource,
+        startDate: '2026-08-01',
+        endDate: '2026-08-02',
+      }),
+    ]);
+
+    const report = await service.getProjectResourceUtilization(project.uuid, regularUser);
+
+    expect(report.summary).toMatchObject({
+      totalAssignedResources: 3,
+      activeAssignments: 1,
+      scheduledAssignments: 1,
+      finishedAssignments: 1,
+    });
+    expect(report.summary.resourcesByCategory).toEqual([
+      { category: ResourceCategory.LAPTOP, count: 1 },
+      { category: ResourceCategory.MOBILE_DEVICE, count: 1 },
+      { category: ResourceCategory.SOFTWARE_LICENSE, count: 1 },
+    ]);
+    expect(report.assignments).toContainEqual(
+      expect.objectContaining({
+        resourceCode: 'LAP-001',
+        temporalStatus: ResourceAssignmentTemporalStatus.ACTIVE,
+        assignedDays: 3,
+        currentAvailability: 'ASIGNADO',
+        authorizedNotes: 'Uso autorizado en pruebas.',
+        task: {
+          uuid: parentTask.uuid,
+          name: parentTask.name,
+        },
+      }),
+    );
+    expect(report.assignments).toContainEqual(
+      expect.objectContaining({
+        resourceCode: 'LIC-001',
+        temporalStatus: ResourceAssignmentTemporalStatus.SCHEDULED,
+        assignedDays: 3,
+        currentAvailability: 'DISPONIBLE',
+      }),
+    );
+    expect(report.assignments).toContainEqual(
+      expect.objectContaining({
+        resourceCode: 'GPS-001',
+        temporalStatus: ResourceAssignmentTemporalStatus.FINISHED,
+        currentAvailability: 'ELIMINADO',
+      }),
+    );
+    report.assignments.forEach((assignment) => {
+      expect(assignment).not.toHaveProperty('assignedHours');
+      expect(assignment).not.toHaveProperty('plannedBudget');
+      expect(assignment).not.toHaveProperty('actualCost');
+    });
+  });
+
+  it('keeps human workload separate from resource assignments', async () => {
+    resourceAssignmentsRepository.setAssignments([
+      createResourceAssignment({
+        resource: createResource({
+          uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+          code: 'LAP-001',
+        }),
+        startDate: '2026-08-01',
+        endDate: '2026-08-03',
+      }),
+    ]);
+
+    const workload = await service.getProjectWorkload(project.uuid, regularUser);
+
+    expect(workload).toEqual([
+      expect.objectContaining({
+        userUuid: regularUser.uuid,
+        assignedHours: '8.50',
+      }),
+    ]);
+  });
+
+  it('rejects resource utilization for users outside the project', async () => {
+    await expect(
+      service.getProjectResourceUtilization(project.uuid, outsiderUser),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 
@@ -230,6 +379,50 @@ function createAssignment(
   };
 }
 
+function createResource(overrides: Partial<Resource>): Resource {
+  return {
+    uuid: overrides.uuid ?? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    name: overrides.name ?? 'Recurso tecnico',
+    description: overrides.description ?? null,
+    code: overrides.code ?? 'REC-001',
+    category: overrides.category ?? ResourceCategory.LAPTOP,
+    serialNumber: overrides.serialNumber ?? null,
+    operationalStatus: overrides.operationalStatus ?? ResourceOperationalStatus.OPERATIONAL,
+    notes: overrides.notes ?? null,
+    isActive: overrides.isActive ?? true,
+    createdAt: overrides.createdAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    updatedAt: overrides.updatedAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    deletedAt: overrides.deletedAt ?? null,
+    assignments: [],
+  };
+}
+
+function createResourceAssignment(overrides: Partial<ResourceAssignment>): ResourceAssignment {
+  const resource =
+    overrides.resource ??
+    createResource({
+      uuid: overrides.resourceUuid ?? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+
+  return {
+    uuid: overrides.uuid ?? 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    resourceUuid: overrides.resourceUuid ?? resource.uuid,
+    projectUuid: overrides.projectUuid ?? '99999999-9999-4999-8999-999999999999',
+    taskUuid: overrides.taskUuid ?? overrides.task?.uuid ?? null,
+    startDate: overrides.startDate ?? '2026-08-01',
+    endDate: overrides.endDate ?? '2026-08-03',
+    assignedByUuid: overrides.assignedByUuid ?? managerUser.uuid,
+    notes: overrides.notes ?? null,
+    createdAt: overrides.createdAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    updatedAt: overrides.updatedAt ?? new Date('2026-07-24T18:30:00.000Z'),
+    deletedAt: overrides.deletedAt ?? null,
+    resource,
+    project: overrides.project ?? createProject(),
+    task: overrides.task ?? null,
+    assignedBy: overrides.assignedBy ?? createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, 'Jefe'),
+  };
+}
+
 function createMember(projectUuid: string, userUuid: string): ProjectMember {
   return {
     uuid: `${projectUuid}-${userUuid}`,
@@ -299,6 +492,84 @@ class InMemoryTaskAssignmentsRepository {
 
   createQueryBuilder(): InMemoryAssignmentQueryBuilder {
     return new InMemoryAssignmentQueryBuilder(this.assignments);
+  }
+}
+
+class InMemoryResourceAssignmentsRepository {
+  constructor(private assignments: readonly ResourceAssignment[]) {}
+
+  setAssignments(assignments: readonly ResourceAssignment[]): void {
+    this.assignments = assignments;
+  }
+
+  find(options: { where: Partial<ResourceAssignment> }): Promise<ResourceAssignment[]> {
+    return Promise.resolve(
+      this.assignments.filter(
+        (assignment) => assignment.deletedAt === null && matchesWhere(assignment, options.where),
+      ),
+    );
+  }
+
+  createQueryBuilder(): InMemoryResourceAssignmentQueryBuilder {
+    return new InMemoryResourceAssignmentQueryBuilder(this.assignments);
+  }
+}
+
+class InMemoryResourceAssignmentQueryBuilder {
+  private projectUuid: string | null = null;
+
+  constructor(private readonly assignments: readonly ResourceAssignment[]) {}
+
+  withDeleted(): this {
+    return this;
+  }
+
+  innerJoinAndSelect(): this {
+    return this;
+  }
+
+  leftJoinAndSelect(): this {
+    return this;
+  }
+
+  where(_condition: string, params: { projectUuid: string }): this {
+    this.projectUuid = params.projectUuid;
+    return this;
+  }
+
+  andWhere(): this {
+    return this;
+  }
+
+  orderBy(): this {
+    return this;
+  }
+
+  addOrderBy(): this {
+    return this;
+  }
+
+  getMany(): Promise<ResourceAssignment[]> {
+    return Promise.resolve(
+      this.assignments
+        .filter(
+          (assignment) =>
+            assignment.projectUuid === this.projectUuid && assignment.deletedAt === null,
+        )
+        .sort((firstAssignment, secondAssignment) => {
+          const startComparison = firstAssignment.startDate.localeCompare(secondAssignment.startDate);
+
+          if (startComparison !== 0) {
+            return startComparison;
+          }
+
+          const endComparison = firstAssignment.endDate.localeCompare(secondAssignment.endDate);
+
+          return endComparison === 0
+            ? firstAssignment.resource.code.localeCompare(secondAssignment.resource.code)
+            : endComparison;
+        }),
+    );
   }
 }
 

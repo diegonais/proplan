@@ -1,4 +1,9 @@
 import { ProjectFinancialSummary, ProjectStatus } from '../projects/types';
+import {
+  ResourceAssignmentTemporalStatus,
+  ResourceCategory,
+  ResourceOperationalStatus,
+} from '../resources/types';
 import { TaskDependencyType, TaskStatus } from '../tasks/types';
 import { WorkloadItem } from '../team/types';
 
@@ -107,6 +112,63 @@ export interface ProjectStatusReport {
 
 export type ProjectBudgetReport = ProjectFinancialSummary;
 
+export type ResourceCurrentAvailabilityStatus =
+  | 'DISPONIBLE'
+  | 'ASIGNADO'
+  | 'NO_DISPONIBLE'
+  | 'ELIMINADO';
+
+export interface ResourceUtilizationProject {
+  uuid: string;
+  name: string;
+  status: ProjectStatus;
+  startDate: string;
+  endDate: string;
+}
+
+export interface ResourceUtilizationTask {
+  uuid: string;
+  name: string;
+}
+
+export interface ResourceCategorySummary {
+  category: ResourceCategory;
+  count: number;
+}
+
+export interface ResourceUtilizationSummary {
+  totalAssignedResources: number;
+  activeAssignments: number;
+  scheduledAssignments: number;
+  finishedAssignments: number;
+  resourcesByCategory: ResourceCategorySummary[];
+}
+
+export interface ResourceUtilizationAssignment {
+  uuid: string;
+  projectUuid: string;
+  resourceUuid: string;
+  resourceName: string;
+  resourceCode: string;
+  resourceCategory: ResourceCategory;
+  operationalStatus: ResourceOperationalStatus;
+  task: ResourceUtilizationTask | null;
+  startDate: string;
+  endDate: string;
+  temporalStatus: ResourceAssignmentTemporalStatus;
+  assignedDays: number;
+  currentAvailability: ResourceCurrentAvailabilityStatus;
+  authorizedNotes: string | null;
+}
+
+export interface ResourceUtilizationReport {
+  project: ResourceUtilizationProject;
+  datePolicy: string;
+  today: string;
+  summary: ResourceUtilizationSummary;
+  assignments: ResourceUtilizationAssignment[];
+}
+
 export function getTrafficLightLabel(color: TrafficLightColor): string {
   const labels: Record<TrafficLightColor, string> = {
     GREEN: 'Verde',
@@ -115,4 +177,17 @@ export function getTrafficLightLabel(color: TrafficLightColor): string {
   };
 
   return labels[color];
+}
+
+export function getResourceCurrentAvailabilityStatusLabel(
+  status: ResourceCurrentAvailabilityStatus,
+): string {
+  const labels: Record<ResourceCurrentAvailabilityStatus, string> = {
+    DISPONIBLE: 'Disponible',
+    ASIGNADO: 'Asignado',
+    NO_DISPONIBLE: 'No disponible',
+    ELIMINADO: 'Eliminado',
+  };
+
+  return labels[status];
 }

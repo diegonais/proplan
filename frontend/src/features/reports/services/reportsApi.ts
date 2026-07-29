@@ -5,6 +5,7 @@ import {
   DashboardReport,
   GanttReport,
   ProjectBudgetReport,
+  ResourceUtilizationReport,
   ProjectStatusReport,
   TrafficLightReport,
 } from '../types';
@@ -29,6 +30,16 @@ export async function getProjectGanttReport(projectUuid: string): Promise<GanttR
 
 export async function getProjectWorkloadReport(projectUuid: string): Promise<WorkloadItem[]> {
   const response = await httpClient.get<WorkloadItem[]>(`/projects/${projectUuid}/reports/workload`);
+
+  return response.data;
+}
+
+export async function getProjectResourceUtilizationReport(
+  projectUuid: string,
+): Promise<ResourceUtilizationReport> {
+  const response = await httpClient.get<ResourceUtilizationReport>(
+    `/projects/${projectUuid}/reports/resource-utilization`,
+  );
 
   return response.data;
 }

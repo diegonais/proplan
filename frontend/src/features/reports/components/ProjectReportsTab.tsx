@@ -128,7 +128,7 @@ export function ProjectReportsTab({ project, canViewFinancialDetails }: ProjectR
             Reportes
           </Typography>
           <Typography color="text.secondary">
-            Carga, avance, presupuesto, actividades vencidas y estado general calculado.
+            Carga de trabajo humana, avance, presupuesto, actividades vencidas y estado general.
           </Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
@@ -244,10 +244,10 @@ export function ProjectReportsTab({ project, canViewFinancialDetails }: ProjectR
       ) : null}
 
       <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-        <Table aria-label="Carga por recurso">
+        <Table aria-label="Carga de trabajo humana por persona">
           <TableHead>
             <TableRow>
-              <TableCell>Recurso</TableCell>
+              <TableCell>Persona</TableCell>
               <TableCell align="right">Horas asignadas</TableCell>
             </TableRow>
           </TableHead>

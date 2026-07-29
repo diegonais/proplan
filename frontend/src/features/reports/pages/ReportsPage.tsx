@@ -20,6 +20,7 @@ import { getProject, listProjects } from '../../projects/services/projectsApi';
 import { Project } from '../../projects/types';
 import { ProjectGanttTab } from '../components/ProjectGanttTab';
 import { ProjectReportsTab } from '../components/ProjectReportsTab';
+import { ResourceUtilizationReportTab } from '../components/ResourceUtilizationReportTab';
 
 const reportsProjectLimit = 100;
 
@@ -138,7 +139,7 @@ export function ReportsPage() {
           Reportes
         </Typography>
         <Typography color="text.secondary">
-          Analisis por proyecto autorizado: Gantt, carga, presupuesto, estado y exportaciones.
+          Analisis por proyecto autorizado: Gantt, carga humana, recursos, presupuesto y estado.
         </Typography>
       </Stack>
 
@@ -199,6 +200,7 @@ export function ReportsPage() {
           >
             <Tab label="Diagrama de Gantt" />
             <Tab label="Indicadores y exportaciones" />
+            <Tab label="Utilizacion de recursos" />
           </Tabs>
           <Box sx={{ p: { xs: 2, sm: 3 } }}>
             {selectedReportTab === 0 ? <ProjectGanttTab project={selectedProject} /> : null}
@@ -207,6 +209,9 @@ export function ReportsPage() {
                 project={selectedProject}
                 canViewFinancialDetails={canViewFinancialDetails}
               />
+            ) : null}
+            {selectedReportTab === 2 ? (
+              <ResourceUtilizationReportTab project={selectedProject} />
             ) : null}
           </Box>
         </Paper>
