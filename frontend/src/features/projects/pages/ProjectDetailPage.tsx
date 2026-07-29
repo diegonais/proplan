@@ -51,6 +51,10 @@ export function ProjectDetailPage() {
     project !== null &&
     (user?.role === 'ADMIN' ||
       (user?.role === 'PROJECT_MANAGER' && project.managerUuid === user.uuid));
+  const canViewOperationalTabs = canManageProject;
+  const canAccessResourceCatalog = user?.role === 'ADMIN';
+  const canViewReports = canManageProject;
+  const canViewProjectFinancialSummary = user?.role === 'ADMIN' || user?.role === 'PROJECT_MANAGER';
 
   useEffect(() => {
     if (uuid === undefined) {
@@ -92,6 +96,11 @@ export function ProjectDetailPage() {
     let isActive = true;
     setActiveResourceAssignmentsCount(null);
 
+    if (!canViewOperationalTabs) {
+      setActiveResourceAssignmentsCount(null);
+      return;
+    }
+
     void listProjectResourceAssignments(project.uuid, { temporalStatus: 'ACTIVA' })
       .then((assignments) => {
         if (isActive) {
@@ -107,7 +116,7 @@ export function ProjectDetailPage() {
     return () => {
       isActive = false;
     };
-  }, [project]);
+  }, [canViewOperationalTabs, project]);
 
   const handleDelete = async () => {
     if (project === null) {
@@ -162,13 +171,15 @@ export function ProjectDetailPage() {
           <Button component={Link} to="/projects" startIcon={<ArrowBackOutlinedIcon />}>
             Volver
           </Button>
-          <Button
-            component={Link}
-            to={`/reports?projectUuid=${project.uuid}`}
-            startIcon={<AssessmentOutlinedIcon />}
-          >
-            Ver reportes
-          </Button>
+          {canViewReports ? (
+            <Button
+              component={Link}
+              to={`/reports?projectUuid=${project.uuid}`}
+              startIcon={<AssessmentOutlinedIcon />}
+            >
+              Ver reportes
+            </Button>
+          ) : null}
           {canManageProject ? (
             <>
               <Button component={Link} to={`/projects/${project.uuid}/edit`} startIcon={<EditOutlinedIcon />}>
@@ -200,8 +211,8 @@ export function ProjectDetailPage() {
         >
           <Tab label="Resumen" />
           <Tab label="Actividades" />
-          <Tab label="Equipo" />
-          <Tab label="Recursos" />
+          {canViewOperationalTabs ? <Tab label="Equipo" /> : null}
+          {canViewOperationalTabs ? <Tab label="Recursos" /> : null}
           {canManageProject ? <Tab label="Presupuesto y costos" /> : null}
         </Tabs>
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -220,22 +231,26 @@ export function ProjectDetailPage() {
                   </Typography>
                   <Typography>{project.manager.name}</Typography>
                 </Stack>
-                <Stack spacing={0.5}>
-                  <Typography variant="body2" color="text.secondary">
-                    Presupuesto aprobado
-                  </Typography>
-                  <Typography>{formatMoney(project.approvedBudget)}</Typography>
-                </Stack>
-                <Stack spacing={0.5}>
-                  <Typography variant="body2" color="text.secondary">
-                    Recursos actualmente asignados
-                  </Typography>
-                  <Typography>
-                    {activeResourceAssignmentsCount === null
-                      ? 'Sin calcular'
-                      : activeResourceAssignmentsCount}
-                  </Typography>
-                </Stack>
+                {canViewProjectFinancialSummary ? (
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" color="text.secondary">
+                      Presupuesto aprobado
+                    </Typography>
+                    <Typography>{formatMoney(project.approvedBudget)}</Typography>
+                  </Stack>
+                ) : null}
+                {canViewOperationalTabs ? (
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" color="text.secondary">
+                      Recursos actualmente asignados
+                    </Typography>
+                    <Typography>
+                      {activeResourceAssignmentsCount === null
+                        ? 'Sin calcular'
+                        : activeResourceAssignmentsCount}
+                    </Typography>
+                  </Stack>
+                ) : null}
               </Stack>
 
               <Divider />
@@ -271,13 +286,15 @@ export function ProjectDetailPage() {
           {selectedTab === 1 ? (
             <ProjectTasksTab project={project} canManage={canManageProject} />
           ) : null}
-          {selectedTab === 2 ? (
+          {selectedTab === 2 && canViewOperationalTabs ? (
             <ProjectTeamTab project={project} canManage={canManageProject} />
           ) : null}
-          {selectedTab === 3 ? (
+          {selectedTab === 3 && canViewOperationalTabs ? (
             <ProjectResourcesTab
               project={project}
               canManage={canManageProject}
+              canAccessCatalog={canAccessResourceCatalog}
+              requireActivityAssignment={user.role === 'PROJECT_MANAGER'}
               onAssignmentsChanged={(assignments: ResourceAssignment[]) => {
                 setActiveResourceAssignmentsCount(
                   assignments.filter((assignment) => assignment.temporalStatus === 'ACTIVA').length,

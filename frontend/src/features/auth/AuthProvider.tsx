@@ -68,6 +68,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(response.user);
         setStatus('authenticated');
         showNotification('Inicio de sesión correcto.', 'success');
+        return response.user;
       } catch (error) {
         clearSession();
         throw new Error(getApiErrorMessage(error).message);

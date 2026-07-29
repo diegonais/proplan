@@ -4,8 +4,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Brackets, QueryFailedError, Repository } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { EnvironmentVariables } from '../../config/env.validation';
+import { ProjectMember } from '../project-members/entities/project-member.entity';
+import { Project } from '../projects/entities/project.entity';
+import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto, UserSortField } from './dto/list-users-query.dto';
 import { PaginatedUsersResponseDto } from './dto/paginated-users-response.dto';
@@ -14,12 +19,24 @@ import { UserResponseDto } from './dto/user-response.dto';
 import { User } from './entities/user.entity';
 
 const UNIQUE_VIOLATION_CODE = '23505';
+const ACTIVE_PROJECT_STATUSES = [ProjectStatus.PLANNING, ProjectStatus.IN_PROGRESS] as const;
+const ACTIVE_TASK_STATUSES = [
+  TaskStatus.PENDING,
+  TaskStatus.IN_PROGRESS,
+  TaskStatus.BLOCKED,
+] as const;
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Project)
+    private readonly projectsRepository: Repository<Project>,
+    @InjectRepository(ProjectMember)
+    private readonly projectMembersRepository: Repository<ProjectMember>,
+    @InjectRepository(TaskAssignment)
+    private readonly taskAssignmentsRepository: Repository<TaskAssignment>,
     private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
@@ -110,6 +127,10 @@ export class UsersService {
       await this.ensureAtLeastOneOtherActiveAdmin();
     }
 
+    if (!isActive && user.isActive) {
+      await this.ensureCanDeactivateUser(user);
+    }
+
     user.isActive = isActive;
 
     return UserResponseDto.fromEntity(await this.usersRepository.save(user));
@@ -179,6 +200,60 @@ export class UsersService {
 
     if (activeAdmins <= 1) {
       throw new BadRequestException('El sistema debe conservar al menos un Administrador activo.');
+    }
+  }
+
+  private async ensureCanDeactivateUser(user: User): Promise<void> {
+    const managedProjectsCount = await this.projectsRepository
+      .createQueryBuilder('project')
+      .where('project.managerUuid = :userUuid', { userUuid: user.uuid })
+      .andWhere('project.status IN (:...activeProjectStatuses)', {
+        activeProjectStatuses: ACTIVE_PROJECT_STATUSES,
+      })
+      .andWhere('project.deletedAt IS NULL')
+      .getCount();
+
+    if (managedProjectsCount > 0) {
+      throw new BadRequestException(
+        'No se puede desactivar al usuario porque dirige proyectos en planificacion o ejecucion.',
+      );
+    }
+
+    const activeMembershipsCount = await this.projectMembersRepository
+      .createQueryBuilder('member')
+      .innerJoin('member.project', 'project')
+      .where('member.userUuid = :userUuid', { userUuid: user.uuid })
+      .andWhere('project.status IN (:...activeProjectStatuses)', {
+        activeProjectStatuses: ACTIVE_PROJECT_STATUSES,
+      })
+      .andWhere('project.deletedAt IS NULL')
+      .getCount();
+
+    if (activeMembershipsCount > 0) {
+      throw new BadRequestException(
+        'No se puede desactivar al usuario porque pertenece a proyectos activos. Retire o reasigne sus responsabilidades primero.',
+      );
+    }
+
+    const activeAssignmentsCount = await this.taskAssignmentsRepository
+      .createQueryBuilder('assignment')
+      .innerJoin('assignment.task', 'task')
+      .innerJoin('task.project', 'project')
+      .where('assignment.userUuid = :userUuid', { userUuid: user.uuid })
+      .andWhere('task.status IN (:...activeTaskStatuses)', {
+        activeTaskStatuses: ACTIVE_TASK_STATUSES,
+      })
+      .andWhere('task.deletedAt IS NULL')
+      .andWhere('project.status IN (:...activeProjectStatuses)', {
+        activeProjectStatuses: ACTIVE_PROJECT_STATUSES,
+      })
+      .andWhere('project.deletedAt IS NULL')
+      .getCount();
+
+    if (activeAssignmentsCount > 0) {
+      throw new BadRequestException(
+        'No se puede desactivar al usuario porque tiene actividades activas asignadas.',
+      );
     }
   }
 

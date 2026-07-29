@@ -47,7 +47,7 @@ import { ResourcesService } from './resources.service';
 @ApiUnauthorizedResponse({ description: 'Token ausente, invalido o vencido.' })
 @ApiForbiddenResponse({ description: 'El usuario autenticado no tiene rol suficiente.' })
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+@Roles(UserRole.ADMIN)
 @Controller({
   path: 'resources',
   version: '1',

@@ -109,7 +109,11 @@ describe('ResourcesController access and validation', () => {
       .expect(403);
   });
 
-  it('prevents users from accessing the full institutional catalog', async () => {
+  it('prevents project managers and users from accessing the full institutional catalog', async () => {
+    await request(httpServer)
+      .get('/resources')
+      .set('x-test-role', UserRole.PROJECT_MANAGER)
+      .expect(403);
     await request(httpServer).get('/resources').set('x-test-role', UserRole.USER).expect(403);
     expect(findAll).not.toHaveBeenCalled();
   });

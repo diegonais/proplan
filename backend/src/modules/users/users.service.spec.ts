@@ -4,19 +4,33 @@ import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { EnvironmentVariables } from '../../config/env.validation';
+import { ProjectMember } from '../project-members/entities/project-member.entity';
+import { Project } from '../projects/entities/project.entity';
+import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
 
 describe('UsersService', () => {
   let repository: InMemoryUsersRepository;
+  let projectsRepository: InMemoryProjectsRepository;
+  let projectMembersRepository: InMemoryProjectMembersRepository;
+  let taskAssignmentsRepository: InMemoryTaskAssignmentsRepository;
   let service: UsersService;
 
   beforeEach(() => {
     repository = new InMemoryUsersRepository();
+    projectsRepository = new InMemoryProjectsRepository();
+    projectMembersRepository = new InMemoryProjectMembersRepository();
+    taskAssignmentsRepository = new InMemoryTaskAssignmentsRepository();
     service = new UsersService(
       repository as unknown as Repository<User>,
+      projectsRepository as unknown as Repository<Project>,
+      projectMembersRepository as unknown as Repository<ProjectMember>,
+      taskAssignmentsRepository as unknown as Repository<TaskAssignment>,
       {
         get: () => 10,
       } as unknown as ConfigService<EnvironmentVariables, true>,
@@ -107,6 +121,69 @@ describe('UsersService', () => {
 
     await expect(service.updateStatus(admin.uuid, false)).rejects.toBeInstanceOf(
       BadRequestException,
+    );
+  });
+
+  it('prevents deactivating a project manager with active managed projects', async () => {
+    const manager = await service.create({
+      name: 'Jefe Proyecto',
+      email: 'jefe@proplan.local',
+      password: 'TemporalPassword123',
+      role: UserRole.PROJECT_MANAGER,
+    });
+    projectsRepository.projects.push({
+      uuid: randomUUID(),
+      managerUuid: manager.uuid,
+      status: ProjectStatus.IN_PROGRESS,
+      deletedAt: null,
+    });
+
+    await expect(service.updateStatus(manager.uuid, false)).rejects.toThrow(
+      'No se puede desactivar al usuario porque dirige proyectos en planificacion o ejecucion.',
+    );
+  });
+
+  it('prevents deactivating a user who belongs to active projects', async () => {
+    const user = await service.create({
+      name: 'Usuario Proyecto',
+      email: 'miembro@proplan.local',
+      password: 'TemporalPassword123',
+      role: UserRole.USER,
+    });
+    projectMembersRepository.members.push({
+      userUuid: user.uuid,
+      project: {
+        status: ProjectStatus.PLANNING,
+        deletedAt: null,
+      },
+    });
+
+    await expect(service.updateStatus(user.uuid, false)).rejects.toThrow(
+      'No se puede desactivar al usuario porque pertenece a proyectos activos.',
+    );
+  });
+
+  it('prevents deactivating a user who has active task assignments', async () => {
+    const user = await service.create({
+      name: 'Usuario Actividad',
+      email: 'actividad@proplan.local',
+      password: 'TemporalPassword123',
+      role: UserRole.USER,
+    });
+    taskAssignmentsRepository.assignments.push({
+      userUuid: user.uuid,
+      task: {
+        status: TaskStatus.BLOCKED,
+        deletedAt: null,
+        project: {
+          status: ProjectStatus.IN_PROGRESS,
+          deletedAt: null,
+        },
+      },
+    });
+
+    await expect(service.updateStatus(user.uuid, false)).rejects.toThrow(
+      'No se puede desactivar al usuario porque tiene actividades activas asignadas.',
     );
   });
 
@@ -210,5 +287,116 @@ class InMemoryUsersRepository {
         Object.entries(options.where).every(([key, value]) => user[key as keyof User] === value),
       ).length,
     );
+  }
+}
+
+interface ProjectResponsibility {
+  uuid: string;
+  managerUuid: string;
+  status: ProjectStatus;
+  deletedAt: Date | null;
+}
+
+interface ProjectMembershipResponsibility {
+  userUuid: string;
+  project: {
+    status: ProjectStatus;
+    deletedAt: Date | null;
+  };
+}
+
+interface TaskAssignmentResponsibility {
+  userUuid: string;
+  task: {
+    status: TaskStatus;
+    deletedAt: Date | null;
+    project: {
+      status: ProjectStatus;
+      deletedAt: Date | null;
+    };
+  };
+}
+
+interface QueryParams {
+  userUuid?: string;
+  activeProjectStatuses?: readonly ProjectStatus[];
+  activeTaskStatuses?: readonly TaskStatus[];
+}
+
+class InMemoryProjectsRepository {
+  projects: ProjectResponsibility[] = [];
+
+  createQueryBuilder(): InMemoryCountQueryBuilder {
+    return new InMemoryCountQueryBuilder((params) =>
+      this.projects.filter(
+        (project) =>
+          project.managerUuid === params.userUuid &&
+          params.activeProjectStatuses?.includes(project.status) === true &&
+          project.deletedAt === null,
+      ).length,
+    );
+  }
+}
+
+class InMemoryProjectMembersRepository {
+  members: ProjectMembershipResponsibility[] = [];
+
+  createQueryBuilder(): InMemoryCountQueryBuilder {
+    return new InMemoryCountQueryBuilder((params) =>
+      this.members.filter(
+        (member) =>
+          member.userUuid === params.userUuid &&
+          params.activeProjectStatuses?.includes(member.project.status) === true &&
+          member.project.deletedAt === null,
+      ).length,
+    );
+  }
+}
+
+class InMemoryTaskAssignmentsRepository {
+  assignments: TaskAssignmentResponsibility[] = [];
+
+  createQueryBuilder(): InMemoryCountQueryBuilder {
+    return new InMemoryCountQueryBuilder((params) =>
+      this.assignments.filter(
+        (assignment) =>
+          assignment.userUuid === params.userUuid &&
+          params.activeTaskStatuses?.includes(assignment.task.status) === true &&
+          assignment.task.deletedAt === null &&
+          params.activeProjectStatuses?.includes(assignment.task.project.status) === true &&
+          assignment.task.project.deletedAt === null,
+      ).length,
+    );
+  }
+}
+
+class InMemoryCountQueryBuilder {
+  private params: QueryParams = {};
+
+  constructor(private readonly countFn: (params: QueryParams) => number) {}
+
+  where(_condition: string, params?: QueryParams): this {
+    this.mergeParams(params);
+    return this;
+  }
+
+  andWhere(_condition: string, params?: QueryParams): this {
+    this.mergeParams(params);
+    return this;
+  }
+
+  innerJoin(): this {
+    return this;
+  }
+
+  getCount(): Promise<number> {
+    return Promise.resolve(this.countFn(this.params));
+  }
+
+  private mergeParams(params?: QueryParams): void {
+    this.params = {
+      ...this.params,
+      ...params,
+    };
   }
 }

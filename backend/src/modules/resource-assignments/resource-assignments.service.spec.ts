@@ -41,7 +41,6 @@ describe('ResourceAssignmentsService', () => {
       dataSource.resourcesRepository as unknown as Repository<Resource>,
       dataSource.projectsRepository as unknown as Repository<Project>,
       dataSource.tasksRepository as unknown as Repository<Task>,
-      dataSource.projectMembersRepository as unknown as Repository<ProjectMember>,
       dataSource as unknown as DataSource,
     );
   });
@@ -69,6 +68,20 @@ describe('ResourceAssignmentsService', () => {
       temporalStatus: ResourceAssignmentTemporalStatus.SCHEDULED,
     });
     expect(store.resourceAssignments).toHaveLength(1);
+  });
+
+  it('rejects project managers assigning resources without an activity', async () => {
+    await expect(
+      service.create(
+        store.mainProject.uuid,
+        {
+          resourceUuid: store.laptop.uuid,
+          startDate: '2026-08-01',
+          endDate: '2026-08-05',
+        },
+        managerUser,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('creates a task-level resource assignment when the task belongs to the project', async () => {
@@ -113,7 +126,7 @@ describe('ResourceAssignmentsService', () => {
           startDate: '2026-08-01',
           endDate: '2026-08-05',
         },
-        managerUser,
+        adminUser,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -127,7 +140,7 @@ describe('ResourceAssignmentsService', () => {
           startDate: '2026-07-27',
           endDate: '2026-08-02',
         },
-        managerUser,
+        adminUser,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -208,13 +221,13 @@ describe('ResourceAssignmentsService', () => {
   it('soft delete frees resource availability and keeps history', async () => {
     const assignment = seedAssignment(store, {
       resourceUuid: store.laptop.uuid,
-      startDate: '2026-08-01',
+      startDate: '2026-08-05',
       endDate: '2026-08-10',
     });
 
     const unavailableResources = await service.findAvailableResources(
       store.mainProject.uuid,
-      { startDate: '2026-08-01', endDate: '2026-08-10' },
+      { startDate: '2026-08-05', endDate: '2026-08-10', taskUuid: store.mainTask.uuid },
       managerUser,
     );
 
@@ -227,7 +240,7 @@ describe('ResourceAssignmentsService', () => {
     expect(assignment.deletedAt).toBeInstanceOf(Date);
     const availableResources = await service.findAvailableResources(
       store.mainProject.uuid,
-      { startDate: '2026-08-01', endDate: '2026-08-10' },
+      { startDate: '2026-08-05', endDate: '2026-08-10', taskUuid: store.mainTask.uuid },
       managerUser,
     );
 
@@ -264,7 +277,9 @@ describe('ResourceAssignmentsService', () => {
       startDate: '2026-08-05',
       endDate: '2026-08-06',
     });
-    await expect(service.findAll(store.mainProject.uuid, {}, regularUser)).resolves.toHaveLength(1);
+    await expect(service.findAll(store.mainProject.uuid, {}, regularUser)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('prevents two concurrent requests from reserving the same resource', async () => {

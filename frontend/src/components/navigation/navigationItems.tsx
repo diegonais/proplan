@@ -20,6 +20,7 @@ export const navigationItems: readonly NavigationItem[] = [
     label: 'Panel general',
     path: '/dashboard',
     icon: <DashboardOutlinedIcon aria-hidden="true" />,
+    allowedRoles: ['ADMIN', 'PROJECT_MANAGER'],
   },
   {
     label: 'Proyectos',
@@ -30,12 +31,13 @@ export const navigationItems: readonly NavigationItem[] = [
     label: 'Recursos',
     path: '/resources',
     icon: <Inventory2OutlinedIcon aria-hidden="true" />,
-    allowedRoles: ['ADMIN', 'PROJECT_MANAGER'],
+    allowedRoles: ['ADMIN'],
   },
   {
     label: 'Reportes',
     path: '/reports',
     icon: <AssessmentOutlinedIcon aria-hidden="true" />,
+    allowedRoles: ['ADMIN', 'PROJECT_MANAGER'],
   },
   {
     label: 'Administración de usuarios',

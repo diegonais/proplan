@@ -43,7 +43,7 @@ import { ProjectMembersService } from './project-members.service';
 @ApiUnauthorizedResponse({ description: 'Token ausente, invalido o vencido.' })
 @ApiForbiddenResponse({ description: 'El usuario autenticado no tiene permiso sobre el equipo.' })
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.USER)
+@Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
 @Controller({ version: '1' })
 export class ProjectMembersController {
   constructor(private readonly projectMembersService: ProjectMembersService) {}

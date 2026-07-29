@@ -8,7 +8,7 @@ export interface AuthContextValue {
   status: AuthStatus;
   user: AuthenticatedUser | null;
   isAuthenticated: boolean;
-  login: (request: LoginRequest) => Promise<void>;
+  login: (request: LoginRequest) => Promise<AuthenticatedUser>;
   logout: () => void;
 }
 

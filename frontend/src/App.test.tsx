@@ -250,7 +250,7 @@ describe('App authentication flow', () => {
 
   it('restores the session with /auth/me', async () => {
     window.localStorage.setItem('proplan.accessToken', 'stored-token');
-    window.history.pushState({}, '', '/dashboard');
+    window.history.pushState({}, '', '/projects');
     installHttpMock([
       {
         method: 'GET',
@@ -328,24 +328,16 @@ describe('App authentication flow', () => {
 
   it('adapts the menu by role', async () => {
     window.localStorage.setItem('proplan.accessToken', 'stored-token');
-    window.history.pushState({}, '', '/dashboard');
-    installHttpMock([
-      {
-        method: 'GET',
-        url: '/auth/me',
-        response: {
-          status: 200,
-          data: standardUser,
-        },
-      },
-    ]);
+    window.history.pushState({}, '', '/projects');
+    installHttpMock([createMeRoute(standardUser), createProjectsListRoute([sampleProject])]);
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Panel general' })).toBeInTheDocument();
-    expect(screen.getByText('Proyectos')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Proyectos' })).toBeInTheDocument();
+    expect(screen.queryByText('Panel general')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Proyectos').length).toBeGreaterThan(0);
     expect(screen.queryByText('Recursos')).not.toBeInTheDocument();
-    expect(screen.getByText('Reportes')).toBeInTheDocument();
+    expect(screen.queryByText('Reportes')).not.toBeInTheDocument();
     expect(screen.queryByText('Actividades')).not.toBeInTheDocument();
     expect(screen.queryByText('Equipo')).not.toBeInTheDocument();
     expect(screen.queryByText('Administración de usuarios')).not.toBeInTheDocument();
@@ -376,7 +368,7 @@ describe('App authentication flow', () => {
 
     expect(await screen.findByRole('heading', { name: 'Panel general' })).toBeInTheDocument();
     expect(screen.getByText('Proyectos')).toBeInTheDocument();
-    expect(screen.getByText('Recursos')).toBeInTheDocument();
+    expect(screen.queryByText('Recursos')).not.toBeInTheDocument();
     expect(screen.getByText('Reportes')).toBeInTheDocument();
     expect(screen.queryByText('Administración de usuarios')).not.toBeInTheDocument();
     expect(screen.queryByText('Actividades')).not.toBeInTheDocument();
@@ -567,22 +559,16 @@ describe('Resources catalog flow', () => {
     });
   });
 
-  it('shows read-only actions for project managers', async () => {
-    installHttpMock([
-      createMeRoute(projectManagerUser),
-      createResourcesListRoute([sampleResource]),
-    ]);
+  it('blocks project managers from the institutional resources catalog', async () => {
+    installHttpMock([createMeRoute(projectManagerUser)]);
 
     render(<App />);
 
-    expect(await screen.findByText('LAP-LOG-001')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Su rol permite consultar el catalogo y la disponibilidad/),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recursos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Nuevo recurso' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Editar')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Eliminar')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Consultar disponibilidad')).toBeInTheDocument();
   });
 
   it('shows duplicate code errors from the backend', async () => {
@@ -616,7 +602,7 @@ describe('Resources catalog flow', () => {
 
   it('shows maintenance status and explains unavailable resources', async () => {
     installHttpMock([
-      createMeRoute(projectManagerUser),
+      createMeRoute(adminUser),
       createResourcesListRoute([maintenanceResource]),
       createAvailabilityRoute(maintenanceResource.uuid, {
         resourceUuid: maintenanceResource.uuid,
@@ -715,7 +701,7 @@ describe('Resources catalog flow', () => {
 
   it('shows forbidden errors from the resources API', async () => {
     installHttpMock([
-      createMeRoute(projectManagerUser),
+      createMeRoute(adminUser),
       {
         method: 'GET',
         url: '/resources',
@@ -780,8 +766,8 @@ describe('Resources catalog flow', () => {
     ).toBeInTheDocument();
   });
 
-  it('blocks direct access to resources for regular users', async () => {
-    installHttpMock([createMeRoute(standardUser)]);
+  it('blocks direct access to resources for roles outside admin', async () => {
+    installHttpMock([createMeRoute(projectManagerUser)]);
 
     render(<App />);
 
@@ -1379,20 +1365,23 @@ describe('Project detail behavior', () => {
     });
   });
 
-  it('shows project resources as read-only for regular users', async () => {
+  it('shows only summary and assigned activities tabs for regular users', async () => {
     installHttpMock([
       createMeRoute(standardUser),
       createProjectDetailRoute(),
-      createResourceAssignmentsRoute([sampleResourceAssignment]),
     ]);
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
-
-    expect(await screen.findByText(/Vista de solo lectura/)).toBeInTheDocument();
-    expect(screen.getByText('LAP-LOG-001')).toBeInTheDocument();
-    expect(screen.getByText('Solo lectura')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: sampleProject.name })).toBeInTheDocument();
+    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual([
+      'Resumen',
+      'Actividades',
+    ]);
+    expect(screen.queryByRole('link', { name: 'Ver reportes' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Presupuesto aprobado')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Equipo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Recursos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Nueva asignacion' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Editar asignacion')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Retirar asignacion')).not.toBeInTheDocument();
@@ -1506,27 +1495,16 @@ describe('Reports module', () => {
     });
   });
 
-  it('opens reports from projectUuid and keeps financial details hidden for regular users', async () => {
+  it('blocks reports for regular users', async () => {
     window.history.pushState({}, '', `/reports?projectUuid=${sampleProject.uuid}`);
     installHttpMock([
       createMeRoute(standardUser),
-      createProjectsListRoute([sampleProject]),
-      createGanttReportRoute(),
-      createStatusReportRoute(),
-      createWorkloadReportRoute([]),
     ]);
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Indicadores y exportaciones' }));
-
-    expect(await screen.findByText('No hay horas asignadas.')).toBeInTheDocument();
-    expect(screen.getByText('No hay actividades vencidas.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Exportar PDF' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Exportar Excel' })).not.toBeInTheDocument();
-    expect(
-      getCapturedRequests().some((requestEntry) => requestEntry.url.includes('/reports/budget')),
-    ).toBe(false);
+    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Reportes' })).not.toBeInTheDocument();
   });
 
   it('downloads PDF and Excel exports for project managers', async () => {

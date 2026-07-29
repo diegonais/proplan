@@ -57,6 +57,8 @@ import {
 interface ProjectResourcesTabProps {
   project: Project;
   canManage: boolean;
+  canAccessCatalog: boolean;
+  requireActivityAssignment: boolean;
   onAssignmentsChanged?: (assignments: ResourceAssignment[]) => void;
 }
 
@@ -91,6 +93,8 @@ const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 export function ProjectResourcesTab({
   project,
   canManage,
+  canAccessCatalog,
+  requireActivityAssignment,
   onAssignmentsChanged,
 }: ProjectResourcesTabProps) {
   const { showNotification } = useNotifications();
@@ -157,8 +161,8 @@ export function ProjectResourcesTab({
     [formValues.taskUuid, tasks],
   );
   const validationErrors = useMemo(
-    () => validateFormValues(project, selectedTask, formValues),
-    [formValues, project, selectedTask],
+    () => validateFormValues(project, selectedTask, formValues, requireActivityAssignment),
+    [formValues, project, requireActivityAssignment, selectedTask],
   );
   const hasValidAvailabilityQuery =
     formState !== null &&
@@ -168,6 +172,7 @@ export function ProjectResourcesTab({
       (validationError) =>
         validationError.field !== 'startDate' &&
         validationError.field !== 'endDate' &&
+        validationError.field !== 'taskUuid' &&
         validationError.field !== 'taskDateRange',
     );
 
@@ -328,9 +333,11 @@ export function ProjectResourcesTab({
         </Box>
         {canManage ? (
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            <Button component={Link} to="/resources" startIcon={<Inventory2OutlinedIcon />}>
-              Catalogo
-            </Button>
+            {canAccessCatalog ? (
+              <Button component={Link} to="/resources" startIcon={<Inventory2OutlinedIcon />}>
+                Catalogo
+              </Button>
+            ) : null}
             <Button
               variant="outlined"
               startIcon={<RefreshOutlinedIcon />}
@@ -461,6 +468,7 @@ export function ProjectResourcesTab({
         project={project}
         tasks={tasks}
         values={formValues}
+        requireActivityAssignment={requireActivityAssignment}
         resourceOptions={resourceOptions}
         selectedTask={selectedTask}
         validationErrors={validationErrors}
@@ -499,6 +507,7 @@ interface ResourceAssignmentFormDialogProps {
   project: Project;
   tasks: Task[];
   values: AssignmentFormValues;
+  requireActivityAssignment: boolean;
   resourceOptions: ResourceOption[];
   selectedTask: Task | null;
   validationErrors: ValidationError[];
@@ -513,7 +522,13 @@ interface ResourceAssignmentFormDialogProps {
 }
 
 interface ValidationError {
-  field: 'resourceUuid' | 'startDate' | 'endDate' | 'projectDateRange' | 'taskDateRange';
+  field:
+    | 'resourceUuid'
+    | 'taskUuid'
+    | 'startDate'
+    | 'endDate'
+    | 'projectDateRange'
+    | 'taskDateRange';
   message: string;
 }
 
@@ -523,6 +538,7 @@ function ResourceAssignmentFormDialog({
   project,
   tasks,
   values,
+  requireActivityAssignment,
   resourceOptions,
   selectedTask,
   validationErrors,
@@ -536,6 +552,7 @@ function ResourceAssignmentFormDialog({
   onSubmit,
 }: ResourceAssignmentFormDialogProps) {
   const resourceError = validationErrors.find((error) => error.field === 'resourceUuid');
+  const taskUuidError = validationErrors.find((error) => error.field === 'taskUuid');
   const startDateError = validationErrors.find((error) => error.field === 'startDate');
   const endDateError = validationErrors.find((error) => error.field === 'endDate');
   const projectDateRangeError = validationErrors.find(
@@ -605,9 +622,18 @@ function ResourceAssignmentFormDialog({
               onChange({ ...values, taskUuid: event.target.value });
             }}
             disabled={isTasksLoading}
-            helperText={isTasksLoading ? 'Cargando actividades' : 'Opcional'}
+            required={requireActivityAssignment}
+            error={taskUuidError !== undefined}
+            helperText={
+              taskUuidError?.message ??
+              (isTasksLoading
+                ? 'Cargando actividades'
+                : requireActivityAssignment
+                  ? 'Seleccione una actividad del proyecto.'
+                  : 'Opcional')
+            }
           >
-            <MenuItem value="">Proyecto completo</MenuItem>
+            {!requireActivityAssignment ? <MenuItem value="">Proyecto completo</MenuItem> : null}
             {tasks.map((task) => (
               <MenuItem key={task.uuid} value={task.uuid}>
                 {task.name} ({task.startDate} a {task.endDate})
@@ -725,6 +751,7 @@ function validateFormValues(
   project: Project,
   selectedTask: Task | null,
   values: AssignmentFormValues,
+  requireActivityAssignment: boolean,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
 
@@ -773,6 +800,13 @@ function validateFormValues(
     errors.push({
       field: 'taskDateRange',
       message: 'Las fechas deben estar dentro del rango de la actividad seleccionada.',
+    });
+  }
+
+  if (requireActivityAssignment && values.taskUuid.length === 0) {
+    errors.push({
+      field: 'taskUuid',
+      message: 'Seleccione la actividad a la que se asignara el recurso.',
     });
   }
 

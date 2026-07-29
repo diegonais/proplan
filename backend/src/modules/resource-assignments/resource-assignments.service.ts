@@ -11,7 +11,6 @@ import { DataSource, EntityManager, QueryFailedError, Repository, SelectQueryBui
 import { ResourceOperationalStatus } from '../../common/enums/resource-operational-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
-import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
 import { ResourceResponseDto } from '../resources/dto/resource-response.dto';
 import { Resource } from '../resources/entities/resource.entity';
@@ -61,8 +60,6 @@ export class ResourceAssignmentsService {
     private readonly projectsRepository: Repository<Project>,
     @InjectRepository(Task)
     private readonly tasksRepository: Repository<Task>,
-    @InjectRepository(ProjectMember)
-    private readonly projectMembersRepository: Repository<ProjectMember>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -80,6 +77,8 @@ export class ResourceAssignmentsService {
       return await this.dataSource.transaction(async (entityManager) => {
         const project = await this.findActiveProjectOrFail(entityManager, projectUuid);
         this.ensureCanManageProject(project, currentUser);
+        const requestedTaskUuid = createResourceAssignmentDto.taskUuid ?? null;
+        this.ensureProjectManagerAssignsToTask(currentUser, requestedTaskUuid);
 
         const resource = await this.findAssignableResourceWithLockOrFail(
           entityManager,
@@ -88,7 +87,7 @@ export class ResourceAssignmentsService {
         const task = await this.resolveTaskOrFail(
           entityManager,
           project.uuid,
-          createResourceAssignmentDto.taskUuid ?? null,
+          requestedTaskUuid,
         );
 
         this.ensureAssignmentIsInsideProject(
@@ -147,7 +146,7 @@ export class ResourceAssignmentsService {
     this.ensureQueryDateRangeIsValid(query.startDate, query.endDate);
 
     const project = await this.findActiveProjectOrFail(this.dataSource.manager, projectUuid);
-    await this.ensureCanAccessProject(project, currentUser);
+    this.ensureCanAccessProject(project, currentUser);
 
     const today = getTodayInLaPaz();
     const queryBuilder = this.resourceAssignmentsRepository
@@ -202,7 +201,7 @@ export class ResourceAssignmentsService {
   ): Promise<ResourceAssignmentResponseDto> {
     const assignment = await this.findAssignmentWithRelationsOrFail(this.dataSource.manager, uuid);
     const project = await this.findActiveProjectOrFail(this.dataSource.manager, assignment.projectUuid);
-    await this.ensureCanAccessProject(project, currentUser);
+    this.ensureCanAccessProject(project, currentUser);
 
     return ResourceAssignmentResponseDto.fromEntity(assignment, getTodayInLaPaz());
   }
@@ -232,6 +231,7 @@ export class ResourceAssignmentsService {
           updateResourceAssignmentDto.taskUuid === undefined
             ? assignment.taskUuid
             : updateResourceAssignmentDto.taskUuid;
+        this.ensureProjectManagerAssignsToTask(currentUser, nextTaskUuid);
         requestedResourceUuid = nextResourceUuid;
         requestedStartDate = nextStartDate;
         requestedEndDate = nextEndDate;
@@ -302,6 +302,7 @@ export class ResourceAssignmentsService {
 
     const project = await this.findActiveProjectOrFail(this.dataSource.manager, projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectManagerAssignsToTask(currentUser, query.taskUuid ?? null);
     const task = await this.resolveTaskOrFail(
       this.dataSource.manager,
       project.uuid,
@@ -497,22 +498,15 @@ export class ResourceAssignmentsService {
     }
   }
 
-  private async ensureCanAccessProject(
+  private ensureCanAccessProject(
     project: Project,
     currentUser: AuthenticatedUser,
-  ): Promise<void> {
+  ): void {
     if (currentUser.role === UserRole.ADMIN) {
       return;
     }
 
     if (currentUser.role === UserRole.PROJECT_MANAGER && project.managerUuid === currentUser.uuid) {
-      return;
-    }
-
-    if (
-      currentUser.role === UserRole.USER &&
-      (await this.isProjectMember(project.uuid, currentUser.uuid))
-    ) {
       return;
     }
 
@@ -531,12 +525,15 @@ export class ResourceAssignmentsService {
     throw new ForbiddenException('No tiene permiso para administrar asignaciones de este proyecto.');
   }
 
-  private async isProjectMember(projectUuid: string, userUuid: string): Promise<boolean> {
-    const membershipCount = await this.projectMembersRepository.count({
-      where: { projectUuid, userUuid },
-    });
-
-    return membershipCount > 0;
+  private ensureProjectManagerAssignsToTask(
+    currentUser: AuthenticatedUser,
+    taskUuid: string | null,
+  ): void {
+    if (currentUser.role === UserRole.PROJECT_MANAGER && taskUuid === null) {
+      throw new BadRequestException(
+        'El Jefe de proyecto debe asignar recursos a una actividad especifica.',
+      );
+    }
   }
 
   private ensureQueryDateRangeIsValid(startDate?: string, endDate?: string): void {

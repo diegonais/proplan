@@ -12,6 +12,7 @@ import {
 import { SyntheticEvent, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getDefaultAuthenticatedPath } from '../../../app/router/defaultRoute';
 import { useAuth } from '../authContext';
 
 interface LoginFormState {
@@ -62,11 +63,11 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login({
+      const authenticatedUser = await login({
         email: formState.email.trim().toLowerCase(),
         password: formState.password,
       });
-      void navigate('/dashboard', { replace: true });
+      void navigate(getDefaultAuthenticatedPath(authenticatedUser.role), { replace: true });
     } catch (error) {
       setBackendError(error instanceof Error ? error.message : 'No se pudo iniciar sesión.');
     } finally {

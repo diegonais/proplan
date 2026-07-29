@@ -76,7 +76,10 @@ export class UsersController {
   @Patch(':uuid/status')
   @ApiOperation({ summary: 'Activar o desactivar un usuario.' })
   @ApiOkResponse({ type: UserResponseDto })
-  @ApiBadRequestResponse({ description: 'No se puede dejar el sistema sin Administrador activo.' })
+  @ApiBadRequestResponse({
+    description:
+      'No se puede dejar el sistema sin Administrador activo ni desactivar usuarios con responsabilidades activas.',
+  })
   @ApiNotFoundResponse({ description: 'Usuario no encontrado.' })
   updateStatus(
     @Param('uuid', ParseUUIDPipe) uuid: string,
