@@ -84,6 +84,73 @@ export interface ResourceAvailability {
   conflicts: ResourceAvailabilityConflict[];
 }
 
+export type ResourceAssignmentTemporalStatus = 'PROGRAMADA' | 'ACTIVA' | 'FINALIZADA';
+
+export interface ResourceAssignmentUser {
+  uuid: string;
+  name: string;
+  email: string;
+}
+
+export interface ResourceAssignmentTask {
+  uuid: string;
+  name: string;
+}
+
+export interface ResourceAssignmentProject {
+  uuid: string;
+  name: string;
+}
+
+export interface ResourceAssignmentResource {
+  uuid: string;
+  name: string;
+  code: string;
+  category: ResourceCategory;
+  operationalStatus: ResourceOperationalStatus;
+}
+
+export interface ResourceAssignment {
+  uuid: string;
+  resourceUuid: string;
+  projectUuid: string;
+  taskUuid: string | null;
+  startDate: string;
+  endDate: string;
+  temporalStatus: ResourceAssignmentTemporalStatus;
+  assignedByUuid: string;
+  notes: string | null;
+  resource: ResourceAssignmentResource;
+  project: ResourceAssignmentProject;
+  task: ResourceAssignmentTask | null;
+  assignedBy: ResourceAssignmentUser;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResourceAssignmentPayload {
+  resourceUuid: string;
+  startDate: string;
+  endDate: string;
+  taskUuid?: string | null;
+  notes?: string | null;
+}
+
+export interface ResourceAssignmentsListParams {
+  resourceUuid?: string;
+  category?: ResourceCategory;
+  taskUuid?: string;
+  temporalStatus?: ResourceAssignmentTemporalStatus;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface AvailableResourcesParams {
+  startDate: string;
+  endDate: string;
+  taskUuid?: string;
+}
+
 export const resourceCategories: readonly ResourceCategory[] = [
   'DESKTOP_COMPUTER',
   'LAPTOP',
@@ -139,4 +206,16 @@ export function getResourceUnavailableReasonLabel(reason: ResourceUnavailableRea
   };
 
   return labels[reason];
+}
+
+export function getResourceAssignmentTemporalStatusLabel(
+  status: ResourceAssignmentTemporalStatus,
+): string {
+  const labels: Record<ResourceAssignmentTemporalStatus, string> = {
+    PROGRAMADA: 'Programada',
+    ACTIVA: 'Activa',
+    FINALIZADA: 'Finalizada',
+  };
+
+  return labels[status];
 }

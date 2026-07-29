@@ -1,7 +1,11 @@
 import { httpClient } from '../../../services/http/httpClient';
 import {
   PaginatedResourcesResponse,
+  AvailableResourcesParams,
   Resource,
+  ResourceAssignment,
+  ResourceAssignmentPayload,
+  ResourceAssignmentsListParams,
   ResourceAvailability,
   ResourcePayload,
   ResourceStatusPayload,
@@ -55,8 +59,58 @@ export async function checkResourceAvailability(
   return response.data;
 }
 
-function removeEmptyParams(params: ResourcesListParams): ResourcesListParams {
+export async function listProjectResourceAssignments(
+  projectUuid: string,
+  params: ResourceAssignmentsListParams = {},
+): Promise<ResourceAssignment[]> {
+  const response = await httpClient.get<ResourceAssignment[]>(
+    `/projects/${projectUuid}/resource-assignments`,
+    {
+      params: removeEmptyParams(params),
+    },
+  );
+
+  return response.data;
+}
+
+export async function listAvailableProjectResources(
+  projectUuid: string,
+  params: AvailableResourcesParams,
+): Promise<Resource[]> {
+  const response = await httpClient.get<Resource[]>(`/projects/${projectUuid}/available-resources`, {
+    params: removeEmptyParams(params),
+  });
+
+  return response.data;
+}
+
+export async function createResourceAssignment(
+  projectUuid: string,
+  payload: ResourceAssignmentPayload,
+): Promise<ResourceAssignment> {
+  const response = await httpClient.post<ResourceAssignment>(
+    `/projects/${projectUuid}/resource-assignments`,
+    payload,
+  );
+
+  return response.data;
+}
+
+export async function updateResourceAssignment(
+  uuid: string,
+  payload: ResourceAssignmentPayload,
+): Promise<ResourceAssignment> {
+  const response = await httpClient.patch<ResourceAssignment>(`/resource-assignments/${uuid}`, payload);
+
+  return response.data;
+}
+
+export async function deleteResourceAssignment(uuid: string): Promise<void> {
+  await httpClient.delete(`/resource-assignments/${uuid}`);
+}
+
+function removeEmptyParams<TParams extends object>(params: TParams): Partial<TParams> {
   return Object.fromEntries(
     Object.entries(params).filter(([, value]) => value !== undefined && value !== ''),
-  ) as ResourcesListParams;
+  ) as Partial<TParams>;
 }

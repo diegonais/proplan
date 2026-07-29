@@ -108,6 +108,40 @@ const maintenanceResource = {
   operationalStatus: 'MAINTENANCE',
 };
 
+const sampleResourceAssignment = {
+  uuid: 'ef1fbb9d-5cc8-4b20-a1b5-fb5d42f3a550',
+  resourceUuid: sampleResource.uuid,
+  projectUuid: sampleProject.uuid,
+  taskUuid: sampleTask.uuid,
+  startDate: '2026-08-05',
+  endDate: '2026-08-10',
+  temporalStatus: 'ACTIVA',
+  assignedByUuid: adminUser.uuid,
+  notes: 'Asignado para pruebas de campo.',
+  resource: {
+    uuid: sampleResource.uuid,
+    name: sampleResource.name,
+    code: sampleResource.code,
+    category: sampleResource.category,
+    operationalStatus: sampleResource.operationalStatus,
+  },
+  project: {
+    uuid: sampleProject.uuid,
+    name: sampleProject.name,
+  },
+  task: {
+    uuid: sampleTask.uuid,
+    name: sampleTask.name,
+  },
+  assignedBy: {
+    uuid: adminUser.uuid,
+    name: adminUser.name,
+    email: adminUser.email,
+  },
+  createdAt: '2026-07-24T18:30:00.000Z',
+  updatedAt: '2026-07-24T18:30:00.000Z',
+};
+
 describe('App authentication flow', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -1085,6 +1119,335 @@ describe('Project detail behavior', () => {
     expect(screen.queryByRole('tab', { name: 'Gantt' })).not.toBeInTheDocument();
   });
 
+  it('lists project resource assignments and keeps the definitive tab order', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([sampleResourceAssignment]),
+      createTasksRoute([sampleTask]),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('Recursos actualmente asignados')).toBeInTheDocument();
+    expect(await screen.findByText('1')).toBeInTheDocument();
+
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Resumen',
+      'Actividades',
+      'Equipo',
+      'Recursos',
+      'Presupuesto y costos',
+    ]);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Recursos' }));
+
+    expect(await screen.findByText('LAP-LOG-001')).toBeInTheDocument();
+    expect(screen.getByText('Laptop Dell Latitude 5440')).toBeInTheDocument();
+    expect(screen.getByText('Laptop')).toBeInTheDocument();
+    expect(screen.getByText('Actividad principal')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-05')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+    expect(screen.getByText('Activa')).toBeInTheDocument();
+    expect(screen.getByText('Operativo')).toBeInTheDocument();
+    expect(screen.getAllByText('Administrador PROPLAN').length).toBeGreaterThan(0);
+    expect(screen.getByText('Asignado para pruebas de campo.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Catalogo' })).toHaveAttribute('href', '/resources');
+  });
+
+  it('creates a resource assignment for an activity as project manager', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([]),
+      createTasksRoute([sampleTask]),
+      createAvailableResourcesRoute([sampleResource]),
+      {
+        method: 'POST',
+        url: `/projects/${sampleProject.uuid}/resource-assignments`,
+        response: {
+          status: 201,
+          data: sampleResourceAssignment,
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
+
+    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
+      target: { value: sampleTask.startDate },
+    });
+    fireEvent.change(dialog.getByLabelText(/Fecha final/), {
+      target: { value: sampleTask.endDate },
+    });
+    selectMuiOption(dialog.getByRole('combobox', { name: 'Actividad' }), /Actividad principal/);
+    await waitFor(() => {
+      expect(dialog.getByRole('combobox', { name: 'Recurso' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+    selectMuiOption(dialog.getByRole('combobox', { name: 'Recurso' }), /LAP-LOG-001/);
+    fireEvent.change(dialog.getByLabelText(/Observaciones/), {
+      target: { value: 'Asignado para pruebas de campo.' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some((requestEntry) => {
+          const body = readBody(requestEntry.body);
+
+          return (
+            requestEntry.method === 'POST' &&
+            requestEntry.url === `/projects/${sampleProject.uuid}/resource-assignments` &&
+            body.resourceUuid === sampleResource.uuid &&
+            body.taskUuid === sampleTask.uuid &&
+            body.startDate === '2026-08-05' &&
+            body.endDate === '2026-08-10' &&
+            body.assignedByUuid === undefined
+          );
+        }),
+      ).toBe(true);
+    });
+    expect(
+      getCapturedRequests().some((requestEntry) => {
+        const params = readParams(requestEntry.params);
+
+        return (
+          requestEntry.method === 'GET' &&
+          requestEntry.url === `/projects/${sampleProject.uuid}/available-resources` &&
+          params.startDate === '2026-08-05' &&
+          params.endDate === '2026-08-10' &&
+          params.taskUuid === sampleTask.uuid
+        );
+      }),
+    ).toBe(true);
+  });
+
+  it('shows unavailable resources and conflict 409 messages clearly', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([]),
+      createTasksRoute([sampleTask]),
+      createAvailableResourcesRoute([sampleResource]),
+      {
+        method: 'POST',
+        url: `/projects/${sampleProject.uuid}/resource-assignments`,
+        response: {
+          status: 409,
+          data: {
+            statusCode: 409,
+            message: 'El recurso ya tiene una asignacion que se superpone con las fechas solicitadas.',
+            error: 'Conflict',
+            timestamp: '2026-07-24T18:30:00.000Z',
+            path: `/projects/${sampleProject.uuid}/resource-assignments`,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
+
+    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
+      target: { value: sampleTask.startDate },
+    });
+    fireEvent.change(dialog.getByLabelText(/Fecha final/), {
+      target: { value: sampleTask.endDate },
+    });
+    await waitFor(() => {
+      expect(dialog.getByRole('combobox', { name: 'Recurso' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+    selectMuiOption(dialog.getByRole('combobox', { name: 'Recurso' }), /LAP-LOG-001/);
+    fireEvent.click(dialog.getByRole('button', { name: 'Guardar' }));
+
+    expect(
+      await screen.findByText(/Revise el intervalo o seleccione otro recurso disponible/),
+    ).toBeInTheDocument();
+  });
+
+  it('blocks invalid resource assignment dates before submitting', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([]),
+      createTasksRoute([sampleTask]),
+      createAvailableResourcesRoute([sampleResource]),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
+
+    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
+      target: { value: '2026-08-01' },
+    });
+    fireEvent.change(dialog.getByLabelText(/Fecha final/), {
+      target: { value: '2026-08-04' },
+    });
+    selectMuiOption(dialog.getByRole('combobox', { name: 'Actividad' }), /Actividad principal/);
+
+    expect(
+      await screen.findByText('Las fechas deben estar dentro del rango de la actividad seleccionada.'),
+    ).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: 'Guardar' })).toBeDisabled();
+  });
+
+  it('edits and logically removes a resource assignment as administrator', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([sampleResourceAssignment]),
+      createTasksRoute([sampleTask]),
+      createAvailableResourcesRoute([sampleResource]),
+      {
+        method: 'PATCH',
+        url: `/resource-assignments/${sampleResourceAssignment.uuid}`,
+        response: {
+          status: 200,
+          data: { ...sampleResourceAssignment, notes: 'Fechas ajustadas.' },
+        },
+      },
+      {
+        method: 'DELETE',
+        url: `/resource-assignments/${sampleResourceAssignment.uuid}`,
+        response: {
+          status: 204,
+          data: null,
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
+    fireEvent.click(await screen.findByLabelText('Editar asignacion'));
+
+    const editDialog = within(await screen.findByRole('dialog', { name: 'Editar asignacion de recurso' }));
+    fireEvent.change(editDialog.getByLabelText(/Fecha final/), {
+      target: { value: '2026-08-09' },
+    });
+    fireEvent.change(editDialog.getByLabelText(/Observaciones/), {
+      target: { value: 'Fechas ajustadas.' },
+    });
+    await waitFor(() => {
+      expect(editDialog.getByRole('button', { name: 'Guardar' })).toBeEnabled();
+    });
+    fireEvent.click(editDialog.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some((requestEntry) => {
+          const body = readBody(requestEntry.body);
+
+          return (
+            requestEntry.method === 'PATCH' &&
+            requestEntry.url === `/resource-assignments/${sampleResourceAssignment.uuid}` &&
+            body.endDate === '2026-08-09' &&
+            body.notes === 'Fechas ajustadas.'
+          );
+        }),
+      ).toBe(true);
+    });
+
+    fireEvent.click(await screen.findByLabelText('Retirar asignacion'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retirar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'DELETE' &&
+            requestEntry.url === `/resource-assignments/${sampleResourceAssignment.uuid}`,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('shows project resources as read-only for regular users', async () => {
+    installHttpMock([
+      createMeRoute(standardUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([sampleResourceAssignment]),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
+
+    expect(await screen.findByText(/Vista de solo lectura/)).toBeInTheDocument();
+    expect(screen.getByText('LAP-LOG-001')).toBeInTheDocument();
+    expect(screen.getByText('Solo lectura')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nueva asignacion' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Editar asignacion')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Retirar asignacion')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Presupuesto y costos' })).not.toBeInTheDocument();
+  });
+
+  it('surfaces backend validation for activities from another project', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectDetailRoute(),
+      createResourceAssignmentsRoute([]),
+      createTasksRoute([sampleTask]),
+      createAvailableResourcesRoute([sampleResource]),
+      {
+        method: 'POST',
+        url: `/projects/${sampleProject.uuid}/resource-assignments`,
+        response: {
+          status: 400,
+          data: {
+            statusCode: 400,
+            message: 'La actividad debe pertenecer al mismo proyecto.',
+            error: 'Bad Request',
+            timestamp: '2026-07-24T18:30:00.000Z',
+            path: `/projects/${sampleProject.uuid}/resource-assignments`,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
+
+    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
+      target: { value: sampleTask.startDate },
+    });
+    fireEvent.change(dialog.getByLabelText(/Fecha final/), {
+      target: { value: sampleTask.endDate },
+    });
+    await waitFor(() => {
+      expect(dialog.getByRole('combobox', { name: 'Recurso' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+    selectMuiOption(dialog.getByRole('combobox', { name: 'Recurso' }), /LAP-LOG-001/);
+    fireEvent.click(dialog.getByRole('button', { name: 'Guardar' }));
+
+    expect(
+      await screen.findByText('La actividad debe pertenecer al mismo proyecto.'),
+    ).toBeInTheDocument();
+  });
+
   it('opens the main reports module from project detail', async () => {
     installHttpMock([
       createMeRoute(projectManagerUser),
@@ -1411,6 +1774,28 @@ function createAvailabilityRoute(resourceUuid: string, availability: unknown) {
   };
 }
 
+function createResourceAssignmentsRoute(assignments: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/resource-assignments`,
+    response: {
+      status: 200,
+      data: assignments,
+    },
+  };
+}
+
+function createAvailableResourcesRoute(resources: unknown[]) {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/available-resources`,
+    response: {
+      status: 200,
+      data: resources,
+    },
+  };
+}
+
 function createProjectDetailRoute() {
   return {
     method: 'GET' as const,
@@ -1613,7 +1998,7 @@ async function fillResourceForm() {
   });
 }
 
-function selectMuiOption(combobox: HTMLElement, optionName: string): void {
+function selectMuiOption(combobox: HTMLElement, optionName: string | RegExp): void {
   fireEvent.mouseDown(combobox);
   fireEvent.click(screen.getByRole('option', { name: optionName }));
 }

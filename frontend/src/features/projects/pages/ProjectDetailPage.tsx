@@ -21,6 +21,9 @@ import { useNotifications } from '../../../components/feedback/notificationsCont
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import { formatMoney } from '../../../utils/money';
 import { useAuth } from '../../auth/authContext';
+import { ProjectResourcesTab } from '../../resources/components/ProjectResourcesTab';
+import { listProjectResourceAssignments } from '../../resources/services/resourcesApi';
+import { ResourceAssignment } from '../../resources/types';
 import { ProjectTeamTab } from '../../team/components/ProjectTeamTab';
 import { ProjectTasksTab } from '../../tasks/components/ProjectTasksTab';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
@@ -40,6 +43,9 @@ export function ProjectDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedTab, setSelectedTab] = useState(0);
+  const [activeResourceAssignmentsCount, setActiveResourceAssignmentsCount] = useState<number | null>(
+    null,
+  );
 
   const canManageProject =
     project !== null &&
@@ -76,6 +82,32 @@ export function ProjectDetailPage() {
       isActive = false;
     };
   }, [uuid]);
+
+  useEffect(() => {
+    if (project === null) {
+      setActiveResourceAssignmentsCount(null);
+      return;
+    }
+
+    let isActive = true;
+    setActiveResourceAssignmentsCount(null);
+
+    void listProjectResourceAssignments(project.uuid, { temporalStatus: 'ACTIVA' })
+      .then((assignments) => {
+        if (isActive) {
+          setActiveResourceAssignmentsCount(assignments.length);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setActiveResourceAssignmentsCount(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [project]);
 
   const handleDelete = async () => {
     if (project === null) {
@@ -169,6 +201,7 @@ export function ProjectDetailPage() {
           <Tab label="Resumen" />
           <Tab label="Actividades" />
           <Tab label="Equipo" />
+          <Tab label="Recursos" />
           {canManageProject ? <Tab label="Presupuesto y costos" /> : null}
         </Tabs>
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -192,6 +225,16 @@ export function ProjectDetailPage() {
                     Presupuesto aprobado
                   </Typography>
                   <Typography>{formatMoney(project.approvedBudget)}</Typography>
+                </Stack>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Recursos actualmente asignados
+                  </Typography>
+                  <Typography>
+                    {activeResourceAssignmentsCount === null
+                      ? 'Sin calcular'
+                      : activeResourceAssignmentsCount}
+                  </Typography>
                 </Stack>
               </Stack>
 
@@ -231,7 +274,18 @@ export function ProjectDetailPage() {
           {selectedTab === 2 ? (
             <ProjectTeamTab project={project} canManage={canManageProject} />
           ) : null}
-          {selectedTab === 3 && canManageProject ? (
+          {selectedTab === 3 ? (
+            <ProjectResourcesTab
+              project={project}
+              canManage={canManageProject}
+              onAssignmentsChanged={(assignments: ResourceAssignment[]) => {
+                setActiveResourceAssignmentsCount(
+                  assignments.filter((assignment) => assignment.temporalStatus === 'ACTIVA').length,
+                );
+              }}
+            />
+          ) : null}
+          {selectedTab === 4 && canManageProject ? (
             <ProjectBudgetTab
               project={project}
               canManage={canManageProject}
