@@ -9,6 +9,7 @@ import { ProjectDetailPage } from '../../features/projects/pages/ProjectDetailPa
 import { ProjectEditPage } from '../../features/projects/pages/ProjectEditPage';
 import { ProjectsListPage } from '../../features/projects/pages/ProjectsListPage';
 import { ReportsPage } from '../../features/reports/pages/ReportsPage';
+import { ResourcesPage } from '../../features/resources/pages/ResourcesPage';
 import { UsersAdminPage } from '../../features/users/pages/UsersAdminPage';
 import { AuthenticatedLayout } from '../../layouts/AuthenticatedLayout';
 import { PublicLayout } from '../../layouts/PublicLayout';
@@ -34,6 +35,9 @@ export function AppRouter() {
             <Route path="/projects/:uuid/edit" element={<ProjectEditPage />} />
           </Route>
           <Route path="/projects/:uuid" element={<ProjectDetailPage />} />
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'PROJECT_MANAGER']} />}>
+            <Route path="/resources" element={<ResourcesPage />} />
+          </Route>
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>

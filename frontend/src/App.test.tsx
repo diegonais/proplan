@@ -84,6 +84,30 @@ const sampleSubtask = {
   endDate: '2026-08-12',
 };
 
+const sampleResource = {
+  uuid: 'cf1fbb9d-5cc8-4b20-a1b5-fb5d42f3a548',
+  name: 'Laptop Dell Latitude 5440',
+  description: 'Equipo para pruebas de campo.',
+  code: 'LAP-LOG-001',
+  category: 'LAPTOP',
+  serialNumber: 'SN-2026-0001',
+  operationalStatus: 'OPERATIONAL',
+  notes: 'Garantia vigente.',
+  isActive: true,
+  createdAt: '2026-07-24T18:30:00.000Z',
+  updatedAt: '2026-07-24T18:30:00.000Z',
+};
+
+const maintenanceResource = {
+  ...sampleResource,
+  uuid: 'df1fbb9d-5cc8-4b20-a1b5-fb5d42f3a549',
+  name: 'Servidor de pruebas',
+  code: 'SRV-LOG-001',
+  category: 'SERVER',
+  serialNumber: 'SRV-2026-0001',
+  operationalStatus: 'MAINTENANCE',
+};
+
 describe('App authentication flow', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -286,7 +310,7 @@ describe('App authentication flow', () => {
 
     expect(await screen.findByRole('heading', { name: 'Panel general' })).toBeInTheDocument();
     expect(screen.getByText('Proyectos')).toBeInTheDocument();
-    expect(screen.getByText('Recursos')).toBeInTheDocument();
+    expect(screen.queryByText('Recursos')).not.toBeInTheDocument();
     expect(screen.getByText('Reportes')).toBeInTheDocument();
     expect(screen.queryByText('Actividades')).not.toBeInTheDocument();
     expect(screen.queryByText('Equipo')).not.toBeInTheDocument();
@@ -342,6 +366,393 @@ describe('App authentication flow', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+  });
+});
+
+describe('Resources catalog flow', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('proplan.accessToken', 'stored-token');
+    window.history.pushState({}, '', '/resources');
+    installHttpMock([]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetHttpMock();
+  });
+
+  it('renders the resources catalog with filters and pagination', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([sampleResource], { total: 20 }),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Recursos' })).toBeInTheDocument();
+    expect(await screen.findByText('LAP-LOG-001')).toBeInTheDocument();
+    expect(screen.getByLabelText('Buscar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Categoria')).toBeInTheDocument();
+    expect(screen.getByLabelText('Estado operativo')).toBeInTheDocument();
+    expect(screen.getByLabelText('Estado activo')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Ir a la pagina siguiente'));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'GET' &&
+            requestEntry.url === '/resources' &&
+            readParams(requestEntry.params).page === 2,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('sends catalog filters to the resources API', async () => {
+    installHttpMock([createMeRoute(adminUser), createResourcesListRoute([sampleResource])]);
+
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText('Buscar'), {
+      target: { value: 'Laptop' },
+    });
+    selectMuiOption(screen.getByRole('combobox', { name: 'Categoria' }), 'Laptop');
+    selectMuiOption(screen.getByRole('combobox', { name: 'Estado operativo' }), 'En mantenimiento');
+    selectMuiOption(screen.getByRole('combobox', { name: 'Estado activo' }), 'Inactivos');
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some((requestEntry) => {
+          const params = readParams(requestEntry.params);
+
+          return (
+            requestEntry.method === 'GET' &&
+            requestEntry.url === '/resources' &&
+            params.search === 'Laptop' &&
+            params.category === 'LAPTOP' &&
+            params.operationalStatus === 'MAINTENANCE' &&
+            params.isActive === false
+          );
+        }),
+      ).toBe(true);
+    });
+  });
+
+  it('creates a resource as administrator', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([]),
+      {
+        method: 'POST',
+        url: '/resources',
+        response: {
+          status: 201,
+          data: sampleResource,
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recurso' }));
+    await fillResourceForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'POST' &&
+            requestEntry.url === '/resources' &&
+            readBody(requestEntry.body).code === 'LAP-LOG-001',
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('edits resource data, operational status and active state as administrator', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([sampleResource]),
+      {
+        method: 'PATCH',
+        url: `/resources/${sampleResource.uuid}`,
+        response: {
+          status: 200,
+          data: { ...sampleResource, name: 'Laptop Dell actualizada' },
+        },
+      },
+      {
+        method: 'PATCH',
+        url: `/resources/${sampleResource.uuid}/status`,
+        response: {
+          status: 200,
+          data: {
+            ...sampleResource,
+            name: 'Laptop Dell actualizada',
+            operationalStatus: 'MAINTENANCE',
+            isActive: false,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByLabelText('Editar'));
+    const editDialog = await screen.findByRole('dialog', { name: 'Editar recurso' });
+    const dialog = within(editDialog);
+
+    fireEvent.change(dialog.getByLabelText(/Nombre/), {
+      target: { value: 'Laptop Dell actualizada' },
+    });
+    selectMuiOption(dialog.getByRole('combobox', { name: 'Estado operativo' }), 'En mantenimiento');
+    fireEvent.click(dialog.getByLabelText('Recurso activo'));
+    fireEvent.click(dialog.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'PATCH' &&
+            requestEntry.url === `/resources/${sampleResource.uuid}` &&
+            readBody(requestEntry.body).name === 'Laptop Dell actualizada',
+        ),
+      ).toBe(true);
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'PATCH' &&
+            requestEntry.url === `/resources/${sampleResource.uuid}/status` &&
+            readBody(requestEntry.body).operationalStatus === 'MAINTENANCE' &&
+            readBody(requestEntry.body).isActive === false,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('shows read-only actions for project managers', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createResourcesListRoute([sampleResource]),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('LAP-LOG-001')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Su rol permite consultar el catalogo y la disponibilidad/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nuevo recurso' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Editar')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Eliminar')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Consultar disponibilidad')).toBeInTheDocument();
+  });
+
+  it('shows duplicate code errors from the backend', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([]),
+      {
+        method: 'POST',
+        url: '/resources',
+        response: {
+          status: 409,
+          data: {
+            statusCode: 409,
+            message: 'El codigo de recurso ya esta registrado.',
+            error: 'Conflict',
+            timestamp: '2026-07-24T18:30:00.000Z',
+            path: '/resources',
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recurso' }));
+    await fillResourceForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    expect(await screen.findByText('El codigo de recurso ya esta registrado.')).toBeInTheDocument();
+  });
+
+  it('shows maintenance status and explains unavailable resources', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createResourcesListRoute([maintenanceResource]),
+      createAvailabilityRoute(maintenanceResource.uuid, {
+        resourceUuid: maintenanceResource.uuid,
+        available: false,
+        operationalStatus: 'MAINTENANCE',
+        unavailableReason: 'NON_OPERATIONAL_STATUS',
+        conflicts: [],
+      }),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('En mantenimiento')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Disponibilidad desde'), {
+      target: { value: '2026-08-01' },
+    });
+    fireEvent.change(screen.getByLabelText('Disponibilidad hasta'), {
+      target: { value: '2026-08-10' },
+    });
+
+    expect(await screen.findByText('No disponible')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Consultar disponibilidad'));
+
+    expect(
+      await screen.findAllByText('El recurso no esta en estado operativo.'),
+    ).toHaveLength(2);
+  });
+
+  it('consults availability and shows assignment conflicts from the backend', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([sampleResource]),
+      createAvailabilityRoute(sampleResource.uuid, {
+        resourceUuid: sampleResource.uuid,
+        available: false,
+        operationalStatus: 'OPERATIONAL',
+        unavailableReason: 'ASSIGNMENT_CONFLICT',
+        conflicts: [
+          {
+            uuid: 'ef1fbb9d-5cc8-4b20-a1b5-fb5d42f3a550',
+            projectUuid: sampleProject.uuid,
+            taskUuid: sampleTask.uuid,
+            startDate: '2026-08-02',
+            endDate: '2026-08-05',
+          },
+        ],
+      }),
+    ]);
+
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText('Disponibilidad desde'), {
+      target: { value: '2026-08-01' },
+    });
+    fireEvent.change(screen.getByLabelText('Disponibilidad hasta'), {
+      target: { value: '2026-08-10' },
+    });
+
+    expect(await screen.findByText('Asignacion superpuesta')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Consultar disponibilidad'));
+
+    expect(await screen.findByText('Asignaciones en conflicto')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-02 a 2026-08-05')).toBeInTheDocument();
+  });
+
+  it('confirms logical deletion before calling the resources API', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([sampleResource]),
+      {
+        method: 'DELETE',
+        url: `/resources/${sampleResource.uuid}`,
+        response: {
+          status: 204,
+          data: null,
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByLabelText('Eliminar'));
+    expect(await screen.findByRole('dialog', { name: 'Eliminar recurso' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some(
+          (requestEntry) =>
+            requestEntry.method === 'DELETE' &&
+            requestEntry.url === `/resources/${sampleResource.uuid}`,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('shows forbidden errors from the resources API', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      {
+        method: 'GET',
+        url: '/resources',
+        response: {
+          status: 403,
+          data: {
+            statusCode: 403,
+            message: 'No tiene permiso para consultar recursos.',
+            error: 'Forbidden',
+            timestamp: '2026-07-24T18:30:00.000Z',
+            path: '/resources',
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('No tiene permiso para consultar recursos.')).toBeInTheDocument();
+  });
+
+  it('shows conflict errors when status updates are rejected', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createResourcesListRoute([sampleResource]),
+      {
+        method: 'PATCH',
+        url: `/resources/${sampleResource.uuid}`,
+        response: {
+          status: 200,
+          data: sampleResource,
+        },
+      },
+      {
+        method: 'PATCH',
+        url: `/resources/${sampleResource.uuid}/status`,
+        response: {
+          status: 409,
+          data: {
+            statusCode: 409,
+            message: 'El recurso tiene asignaciones actuales o futuras.',
+            error: 'Conflict',
+            timestamp: '2026-07-24T18:30:00.000Z',
+            path: `/resources/${sampleResource.uuid}/status`,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByLabelText('Editar'));
+    const editDialog = await screen.findByRole('dialog', { name: 'Editar recurso' });
+    selectMuiOption(
+      within(editDialog).getByRole('combobox', { name: 'Estado operativo' }),
+      'En mantenimiento',
+    );
+    fireEvent.click(within(editDialog).getByRole('button', { name: 'Guardar' }));
+
+    expect(
+      await screen.findByText('El recurso tiene asignaciones actuales o futuras.'),
+    ).toBeInTheDocument();
+  });
+
+  it('blocks direct access to resources for regular users', async () => {
+    installHttpMock([createMeRoute(standardUser)]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(screen.queryByText('Recursos')).not.toBeInTheDocument();
   });
 });
 
@@ -970,6 +1381,36 @@ function createProjectsListRoute(projects: unknown[]) {
   };
 }
 
+function createResourcesListRoute(resources: unknown[], overrides: { total?: number } = {}) {
+  return {
+    method: 'GET' as const,
+    url: '/resources',
+    response: {
+      status: 200,
+      data: {
+        data: resources,
+        meta: {
+          page: 1,
+          limit: 10,
+          total: overrides.total ?? resources.length,
+          totalPages: (overrides.total ?? resources.length) > 0 ? 1 : 0,
+        },
+      },
+    },
+  };
+}
+
+function createAvailabilityRoute(resourceUuid: string, availability: unknown) {
+  return {
+    method: 'GET' as const,
+    url: `/resources/${resourceUuid}/availability`,
+    response: {
+      status: 200,
+      data: availability,
+    },
+  };
+}
+
 function createProjectDetailRoute() {
   return {
     method: 'GET' as const,
@@ -1148,6 +1589,33 @@ async function fillProjectForm(overrides: Partial<Record<'startDate' | 'endDate'
   fireEvent.change(screen.getByLabelText(/Presupuesto aprobado/), {
     target: { value: '1500' },
   });
+}
+
+async function fillResourceForm() {
+  const resourceDialog = within(await screen.findByRole('dialog', { name: 'Crear recurso' }));
+
+  fireEvent.change(resourceDialog.getByLabelText(/Nombre/), {
+    target: { value: 'Laptop Dell Latitude 5440' },
+  });
+  fireEvent.change(resourceDialog.getByLabelText(/Codigo/), {
+    target: { value: 'lap-log-001' },
+  });
+  fireEvent.change(resourceDialog.getByLabelText(/Descripcion/), {
+    target: { value: 'Equipo para pruebas de campo.' },
+  });
+  selectMuiOption(resourceDialog.getByRole('combobox', { name: 'Categoria' }), 'Laptop');
+  fireEvent.change(resourceDialog.getByLabelText(/Numero de serie/), {
+    target: { value: 'SN-2026-0001' },
+  });
+  selectMuiOption(resourceDialog.getByRole('combobox', { name: 'Estado operativo' }), 'Operativo');
+  fireEvent.change(resourceDialog.getByLabelText(/Notas/), {
+    target: { value: 'Garantia vigente.' },
+  });
+}
+
+function selectMuiOption(combobox: HTMLElement, optionName: string): void {
+  fireEvent.mouseDown(combobox);
+  fireEvent.click(screen.getByRole('option', { name: optionName }));
 }
 
 function readParams(params: unknown): Record<string, unknown> {

@@ -28,8 +28,9 @@ export const navigationItems: readonly NavigationItem[] = [
   },
   {
     label: 'Recursos',
+    path: '/resources',
     icon: <Inventory2OutlinedIcon aria-hidden="true" />,
-    disabled: true,
+    allowedRoles: ['ADMIN', 'PROJECT_MANAGER'],
   },
   {
     label: 'Reportes',
