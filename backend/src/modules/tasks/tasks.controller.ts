@@ -50,7 +50,10 @@ export class TasksController {
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
   @ApiOperation({ summary: 'Crear una actividad o subactividad dentro de un proyecto.' })
   @ApiCreatedResponse({ type: TaskResponseDto })
-  @ApiBadRequestResponse({ description: 'Datos invalidos o reglas de actividad incumplidas.' })
+  @ApiBadRequestResponse({
+    description:
+      'Datos invalidos, reglas de actividad incumplidas o presupuesto planificado superior al aprobado.',
+  })
   create(
     @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
     @Body() createTaskDto: CreateTaskDto,
@@ -84,7 +87,10 @@ export class TasksController {
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
   @ApiOperation({ summary: 'Actualizar una actividad autorizada.' })
   @ApiOkResponse({ type: TaskResponseDto })
-  @ApiBadRequestResponse({ description: 'Datos invalidos o reglas de actividad incumplidas.' })
+  @ApiBadRequestResponse({
+    description:
+      'Datos invalidos, reglas de actividad incumplidas o presupuesto planificado superior al aprobado.',
+  })
   @ApiNotFoundResponse({ description: 'Actividad no encontrada o eliminada.' })
   update(
     @Param('uuid', ParseUUIDPipe) uuid: string,

@@ -8,9 +8,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, DataSource, Repository } from 'typeorm';
 
 import { ProjectStatus } from '../../common/enums/project-status.enum';
+import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
+import {
+  exceedsApprovedBudget,
+  PROJECT_BUDGET_LIMIT_MESSAGE,
+} from '../../common/utils/project-budget';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Task } from '../tasks/entities/task.entity';
 import { User } from '../users/entities/user.entity';
@@ -202,7 +207,9 @@ export class ProjectsService {
     }
 
     if (updateProjectDto.approvedBudget !== undefined) {
-      project.approvedBudget = normalizeMoney(updateProjectDto.approvedBudget);
+      const approvedBudget = normalizeMoney(updateProjectDto.approvedBudget);
+      await this.ensureApprovedBudgetCanCoverDistributedBudget(project.uuid, approvedBudget);
+      project.approvedBudget = approvedBudget;
     }
 
     const savedProject = await this.dataSource.transaction(async (entityManager) => {
@@ -369,6 +376,20 @@ export class ProjectsService {
       throw new BadRequestException(
         `El proyecto no puede dejar fuera de rango a la actividad "${taskOutsideRange.name}".`,
       );
+    }
+  }
+
+  private async ensureApprovedBudgetCanCoverDistributedBudget(
+    projectUuid: string,
+    approvedBudget: string,
+  ): Promise<void> {
+    const tasks = await this.tasksRepository.find({ where: { projectUuid } });
+    const plannedBudgets = tasks
+      .filter((task) => task.status !== TaskStatus.CANCELLED)
+      .map((task) => task.plannedBudget);
+
+    if (exceedsApprovedBudget(approvedBudget, plannedBudgets)) {
+      throw new BadRequestException(PROJECT_BUDGET_LIMIT_MESSAGE);
     }
   }
 }

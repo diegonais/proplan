@@ -195,6 +195,21 @@ describe('ProjectsService', () => {
     );
   });
 
+  it('rejects approved budget updates below distributed activity budgets', async () => {
+    const project = await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid, approvedBudget: '1000.00' }),
+      adminUser,
+    );
+    tasksRepository.tasks.push(
+      createTask({ projectUuid: project.uuid, plannedBudget: '700.00' }),
+      createTask({ projectUuid: project.uuid, plannedBudget: '250.00' }),
+    );
+
+    await expect(
+      service.update(project.uuid, { approvedBudget: '949.99' }, adminUser),
+    ).rejects.toThrow('presupuesto aprobado');
+  });
+
   it('soft deletes projects and excludes them from normal listings', async () => {
     const project = await service.create(
       createProjectInput({ managerUuid: managerUser.uuid }),

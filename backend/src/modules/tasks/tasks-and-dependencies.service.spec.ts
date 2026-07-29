@@ -54,6 +54,7 @@ describe('Tasks and task dependencies rules', () => {
       managerUuid: managerUser.uuid,
       startDate: '2026-08-01',
       endDate: '2026-08-31',
+      approvedBudget: '1000.00',
     });
     otherProject = createProject({
       uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -155,6 +156,27 @@ describe('Tasks and task dependencies rules', () => {
         managerUser,
       ),
     ).rejects.toThrow('progreso 100');
+  });
+
+  it('rejects creating activities when planned budget exceeds the approved project budget', async () => {
+    await saveTask(tasksRepository, project.uuid, { plannedBudget: '900.00' });
+
+    await expect(
+      tasksService.create(
+        project.uuid,
+        createTaskInput({ plannedBudget: '101.00' }),
+        managerUser,
+      ),
+    ).rejects.toThrow('presupuesto aprobado');
+  });
+
+  it('rejects updating an activity when total planned budget exceeds the approved project budget', async () => {
+    const task = await saveTask(tasksRepository, project.uuid, { plannedBudget: '100.00' });
+    await saveTask(tasksRepository, project.uuid, { plannedBudget: '850.00' });
+
+    await expect(
+      tasksService.update(task.uuid, { plannedBudget: '151.00' }, managerUser),
+    ).rejects.toThrow('presupuesto aprobado');
   });
 
   it('enforces project management permissions by role', async () => {
@@ -437,7 +459,7 @@ function createProject(overrides: Partial<Project>): Project {
     startDate: overrides.startDate ?? '2026-08-01',
     endDate: overrides.endDate ?? '2026-08-31',
     status: ProjectStatus.PLANNING,
-    approvedBudget: '0.00',
+    approvedBudget: overrides.approvedBudget ?? '0.00',
     managerUuid,
     createdAt: new Date('2026-07-24T18:30:00.000Z'),
     updatedAt: new Date('2026-07-24T18:30:00.000Z'),

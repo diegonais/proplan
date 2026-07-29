@@ -11,6 +11,10 @@ import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
+import {
+  exceedsApprovedBudget,
+  PROJECT_BUDGET_LIMIT_MESSAGE,
+} from '../../common/utils/project-budget';
 import { ProjectResponseDto } from '../projects/dto/project-response.dto';
 import { Project } from '../projects/entities/project.entity';
 import { TaskResponseDto } from '../tasks/dto/task-response.dto';
@@ -57,8 +61,11 @@ export class FinancesService {
   ): Promise<ProjectResponseDto> {
     const project = await this.findActiveProjectOrFail(projectUuid);
     this.ensureCanManageFinancials(project, currentUser);
+    const approvedBudget = normalizeMoney(updateProjectBudgetDto.approvedBudget);
 
-    project.approvedBudget = normalizeMoney(updateProjectBudgetDto.approvedBudget);
+    await this.ensureApprovedBudgetCanCoverDistributedBudget(project.uuid, approvedBudget);
+
+    project.approvedBudget = approvedBudget;
     const savedProject = await this.projectsRepository.save(project);
     const reloadedProject = await this.findActiveProjectOrFail(savedProject.uuid);
 
@@ -80,9 +87,19 @@ export class FinancesService {
     const task = await this.findActiveTaskOrFail(taskUuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageFinancials(project, currentUser);
+    const nextPlannedBudget =
+      updateTaskFinancialsDto.plannedBudget === undefined
+        ? task.plannedBudget
+        : normalizeMoney(updateTaskFinancialsDto.plannedBudget);
+
+    await this.ensureProjectPlannedBudgetLimit(project, {
+      uuid: task.uuid,
+      plannedBudget: nextPlannedBudget,
+      status: task.status,
+    });
 
     if (updateTaskFinancialsDto.plannedBudget !== undefined) {
-      task.plannedBudget = normalizeMoney(updateTaskFinancialsDto.plannedBudget);
+      task.plannedBudget = nextPlannedBudget;
     }
 
     if (updateTaskFinancialsDto.actualCost !== undefined) {
@@ -133,4 +150,46 @@ export class FinancesService {
     this.ensureCanViewFinancials(project, currentUser);
   }
 
+  private async ensureApprovedBudgetCanCoverDistributedBudget(
+    projectUuid: string,
+    approvedBudget: string,
+  ): Promise<void> {
+    const plannedBudgets = await this.getActivePlannedBudgets(projectUuid);
+
+    if (exceedsApprovedBudget(approvedBudget, plannedBudgets)) {
+      throw new BadRequestException(PROJECT_BUDGET_LIMIT_MESSAGE);
+    }
+  }
+
+  private async ensureProjectPlannedBudgetLimit(
+    project: Project,
+    nextTask: { uuid: string; plannedBudget: string; status: TaskStatus },
+  ): Promise<void> {
+    const plannedBudgets = (await this.getActiveTasks(project.uuid))
+      .filter((task) => task.uuid !== nextTask.uuid)
+      .map((task) => task.plannedBudget);
+
+    if (nextTask.status !== TaskStatus.CANCELLED) {
+      plannedBudgets.push(nextTask.plannedBudget);
+    }
+
+    if (exceedsApprovedBudget(project.approvedBudget, plannedBudgets)) {
+      throw new BadRequestException(PROJECT_BUDGET_LIMIT_MESSAGE);
+    }
+  }
+
+  private async getActivePlannedBudgets(projectUuid: string): Promise<string[]> {
+    return (await this.getActiveTasks(projectUuid)).map((task) => task.plannedBudget);
+  }
+
+  private async getActiveTasks(projectUuid: string): Promise<Task[]> {
+    const tasks = await this.tasksRepository.find({
+      where: {
+        projectUuid,
+        status: Not(TaskStatus.CANCELLED),
+      },
+    });
+
+    return tasks;
+  }
 }

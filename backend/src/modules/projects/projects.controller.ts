@@ -55,7 +55,10 @@ export class ProjectsController {
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
   @ApiOperation({ summary: 'Crear un proyecto y registrar al jefe como miembro inicial.' })
   @ApiCreatedResponse({ type: ProjectResponseDto })
-  @ApiBadRequestResponse({ description: 'Datos invalidos, fechas incorrectas o jefe no valido.' })
+  @ApiBadRequestResponse({
+    description:
+      'Datos invalidos, fechas incorrectas, jefe no valido o presupuesto menor al distribuido.',
+  })
   create(
     @Body() createProjectDto: CreateProjectDto,
     @CurrentUser() currentUser: AuthenticatedUser,

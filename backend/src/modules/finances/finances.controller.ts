@@ -51,7 +51,9 @@ export class FinancesController {
   @Patch('projects/:projectUuid/budget')
   @ApiOperation({ summary: 'Actualizar solamente el presupuesto aprobado del proyecto.' })
   @ApiOkResponse({ type: ProjectResponseDto })
-  @ApiBadRequestResponse({ description: 'Monto invalido o negativo.' })
+  @ApiBadRequestResponse({
+    description: 'Monto invalido, negativo o menor al presupuesto ya distribuido en actividades.',
+  })
   @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
   updateProjectBudget(
     @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
@@ -64,7 +66,10 @@ export class FinancesController {
   @Patch('tasks/:taskUuid/financials')
   @ApiOperation({ summary: 'Actualizar presupuesto planificado y costo ejecutado de una actividad.' })
   @ApiOkResponse({ type: TaskResponseDto })
-  @ApiBadRequestResponse({ description: 'Montos invalidos, negativos o cuerpo vacio.' })
+  @ApiBadRequestResponse({
+    description:
+      'Montos invalidos, negativos, cuerpo vacio o presupuesto planificado superior al aprobado.',
+  })
   @ApiNotFoundResponse({ description: 'Actividad no encontrada o eliminada.' })
   updateTaskFinancials(
     @Param('taskUuid', ParseUUIDPipe) taskUuid: string,

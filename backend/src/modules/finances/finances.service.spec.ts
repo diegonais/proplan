@@ -1,4 +1,9 @@
-import { ForbiddenException, INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  INestApplication,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import * as request from 'supertest';
@@ -155,6 +160,26 @@ describe('FinancesService', () => {
       plannedBudget: '700.10',
       actualCost: '701.15',
     });
+  });
+
+  it('rejects reducing approved budget below distributed activity budgets', async () => {
+    tasksRepository.tasks.push(
+      createTask(project.uuid, { plannedBudget: '900.00' }),
+      createTask(project.uuid, { plannedBudget: '50.00' }),
+    );
+
+    await expect(
+      service.updateProjectBudget(project.uuid, { approvedBudget: '949.99' }, managerUser),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects updating task planned budget above the approved project budget', async () => {
+    const task = createTask(project.uuid, { plannedBudget: '100.00' });
+    tasksRepository.tasks.push(task, createTask(project.uuid, { plannedBudget: '850.00' }));
+
+    await expect(
+      service.updateTaskFinancials(task.uuid, { plannedBudget: '151.00' }, managerUser),
+    ).rejects.toThrow('presupuesto aprobado');
   });
 });
 

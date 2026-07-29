@@ -11,6 +11,10 @@ import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
+import {
+  exceedsApprovedBudget,
+  PROJECT_BUDGET_LIMIT_MESSAGE,
+} from '../../common/utils/project-budget';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
@@ -57,10 +61,17 @@ export class TasksService {
     this.ensureTaskIsInsideProject(project, createTaskDto.startDate, createTaskDto.endDate);
 
     const parentTask = await this.resolveParentTask(project.uuid, createTaskDto.parentTaskUuid ?? null);
+    const plannedBudget = normalizeMoney(createTaskDto.plannedBudget ?? '0.00');
+    const status = createTaskDto.status ?? TaskStatus.PENDING;
 
     if (parentTask !== null) {
       this.ensureTaskIsInsideParent(parentTask, createTaskDto.startDate, createTaskDto.endDate);
     }
+
+    await this.ensureProjectPlannedBudgetLimit(project, {
+      plannedBudget,
+      status,
+    });
 
     const task = await this.tasksRepository.save(
       this.tasksRepository.create({
@@ -70,10 +81,10 @@ export class TasksService {
         description: createTaskDto.description ?? null,
         startDate: createTaskDto.startDate,
         endDate: createTaskDto.endDate,
-        status: createTaskDto.status ?? TaskStatus.PENDING,
+        status,
         progress: createTaskDto.progress ?? 0,
         estimatedHours: formatDecimal(createTaskDto.estimatedHours ?? 0),
-        plannedBudget: normalizeMoney(createTaskDto.plannedBudget ?? '0.00'),
+        plannedBudget,
         actualCost: normalizeMoney(createTaskDto.actualCost ?? '0.00'),
       }),
     );
@@ -121,6 +132,10 @@ export class TasksService {
     const nextEndDate = updateTaskDto.endDate ?? task.endDate;
     const nextStatus = updateTaskDto.status ?? task.status;
     const nextProgress = updateTaskDto.progress ?? task.progress;
+    const nextPlannedBudget =
+      updateTaskDto.plannedBudget === undefined
+        ? task.plannedBudget
+        : normalizeMoney(updateTaskDto.plannedBudget);
     const nextParentTaskUuid =
       updateTaskDto.parentTaskUuid === undefined ? task.parentTaskUuid : updateTaskDto.parentTaskUuid;
 
@@ -144,6 +159,11 @@ export class TasksService {
       uuid: task.uuid,
       startDate: nextStartDate,
       endDate: nextEndDate,
+    });
+    await this.ensureProjectPlannedBudgetLimit(project, {
+      uuid: task.uuid,
+      plannedBudget: nextPlannedBudget,
+      status: nextStatus,
     });
 
     if (updateTaskDto.name !== undefined) {
@@ -175,7 +195,7 @@ export class TasksService {
     }
 
     if (updateTaskDto.plannedBudget !== undefined) {
-      task.plannedBudget = normalizeMoney(updateTaskDto.plannedBudget);
+      task.plannedBudget = nextPlannedBudget;
     }
 
     if (updateTaskDto.actualCost !== undefined) {
@@ -455,6 +475,24 @@ export class TasksService {
       throw new BadRequestException(
         'Una actividad sucesora no puede iniciar antes del fin de esta actividad.',
       );
+    }
+  }
+
+  private async ensureProjectPlannedBudgetLimit(
+    project: Project,
+    nextTask: { uuid?: string; plannedBudget: string; status: TaskStatus },
+  ): Promise<void> {
+    const tasks = await this.tasksRepository.find({ where: { projectUuid: project.uuid } });
+    const plannedBudgets = tasks
+      .filter((task) => task.uuid !== nextTask.uuid && task.status !== TaskStatus.CANCELLED)
+      .map((task) => task.plannedBudget);
+
+    if (nextTask.status !== TaskStatus.CANCELLED) {
+      plannedBudgets.push(nextTask.plannedBudget);
+    }
+
+    if (exceedsApprovedBudget(project.approvedBudget, plannedBudgets)) {
+      throw new BadRequestException(PROJECT_BUDGET_LIMIT_MESSAGE);
     }
   }
 }
