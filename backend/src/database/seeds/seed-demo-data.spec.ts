@@ -9,15 +9,20 @@ import {
   demoResources,
   seedResourceAssignments,
   seedResources,
+  validateDemoBudgets,
   validateDemoResourceAssignments,
 } from './seed-demo-data';
 
 describe('seed demo resource data', () => {
   it('uses unique resource codes and valid non overlapping assignments', () => {
     const uniqueCodes = new Set(demoResources.map((resource) => resource.code));
+    const uniqueAssignmentUuids = new Set(
+      demoResourceAssignments.map((assignment) => assignment.uuid),
+    );
 
     expect(uniqueCodes.size).toBe(demoResources.length);
-    expect(demoResourceAssignments.length).toBeGreaterThanOrEqual(10);
+    expect(uniqueAssignmentUuids.size).toBe(demoResourceAssignments.length);
+    expect(demoResourceAssignments.length).toBeGreaterThanOrEqual(15);
     expect(() => {
       validateDemoResourceAssignments();
     }).not.toThrow();
@@ -26,6 +31,12 @@ describe('seed demo resource data', () => {
         assignment.notes?.includes('debe mostrar conflicto'),
       ),
     ).toBe(true);
+  });
+
+  it('keeps demo project budgets within approved amounts', () => {
+    expect(() => {
+      validateDemoBudgets();
+    }).not.toThrow();
   });
 
   it('seeds resources and assignments idempotently', async () => {
@@ -40,21 +51,24 @@ describe('seed demo resource data', () => {
       resourceAssignmentRepository as unknown as Repository<ResourceAssignment>,
       resourceUuidByKey,
       mapByKey([
-        ['greenPlanning', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'],
-        ['yellowCosts', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'],
-        ['redMigration', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'],
-        ['completedPilot', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4'],
+        ['lastMile2025', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'],
+        ['coldChain2026', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'],
+        ['routeOptimizer2026', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'],
       ]),
       mapByKey([
-        ['greenDiscovery', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb101'],
-        ['greenDesign', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb102'],
-        ['greenDashboardPrototype', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb103'],
-        ['greenProjectsModule', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb104'],
-        ['yellowValidation', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb203'],
-        ['yellowValidationRules', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb204'],
-        ['redInventory', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb301'],
-        ['redSchedule', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb302'],
-        ['completedExecution', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb402'],
+        ['lastMileDiscovery', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb101'],
+        ['lastMileGpsIntegration', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb102'],
+        ['lastMileMobileProof', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb103'],
+        ['lastMileClosure', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb104'],
+        ['coldChainBackend', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb202'],
+        ['coldChainDashboard', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb203'],
+        ['coldChainQa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb204'],
+        ['coldChainClosure', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb205'],
+        ['routeGpsIntegration', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb303'],
+        ['routeProviderApi', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb304'],
+        ['routeAlgorithm', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb305'],
+        ['routeDispatchBoard', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb306'],
+        ['routeMobileQa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb401'],
       ]),
       mapByKey([
         ['pmPlanning', '22222222-2222-4222-8222-222222222222'],
@@ -65,21 +79,24 @@ describe('seed demo resource data', () => {
       resourceAssignmentRepository as unknown as Repository<ResourceAssignment>,
       resourceUuidByKey,
       mapByKey([
-        ['greenPlanning', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'],
-        ['yellowCosts', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'],
-        ['redMigration', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'],
-        ['completedPilot', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4'],
+        ['lastMile2025', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'],
+        ['coldChain2026', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'],
+        ['routeOptimizer2026', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'],
       ]),
       mapByKey([
-        ['greenDiscovery', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb101'],
-        ['greenDesign', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb102'],
-        ['greenDashboardPrototype', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb103'],
-        ['greenProjectsModule', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb104'],
-        ['yellowValidation', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb203'],
-        ['yellowValidationRules', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb204'],
-        ['redInventory', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb301'],
-        ['redSchedule', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb302'],
-        ['completedExecution', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb402'],
+        ['lastMileDiscovery', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb101'],
+        ['lastMileGpsIntegration', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb102'],
+        ['lastMileMobileProof', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb103'],
+        ['lastMileClosure', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb104'],
+        ['coldChainBackend', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb202'],
+        ['coldChainDashboard', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb203'],
+        ['coldChainQa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb204'],
+        ['coldChainClosure', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb205'],
+        ['routeGpsIntegration', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb303'],
+        ['routeProviderApi', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb304'],
+        ['routeAlgorithm', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb305'],
+        ['routeDispatchBoard', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb306'],
+        ['routeMobileQa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb401'],
       ]),
       mapByKey([
         ['pmPlanning', '22222222-2222-4222-8222-222222222222'],
