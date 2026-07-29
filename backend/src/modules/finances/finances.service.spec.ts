@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  INestApplication,
-  ValidationPipe,
-} from '@nestjs/common';
+import { ForbiddenException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import * as request from 'supertest';
@@ -82,7 +78,9 @@ describe('FinancesService', () => {
 
   it('handles approvedBudget zero without invalid division', async () => {
     project.approvedBudget = '0.00';
-    tasksRepository.tasks.push(createTask(project.uuid, { plannedBudget: '0.00', actualCost: '10.00' }));
+    tasksRepository.tasks.push(
+      createTask(project.uuid, { plannedBudget: '0.00', actualCost: '10.00' }),
+    );
 
     const summary = await service.getProjectFinancialSummary(project.uuid, adminUser);
 
@@ -92,9 +90,13 @@ describe('FinancesService', () => {
   });
 
   it('marks the project as exceeded when actual cost is greater than the approved budget', async () => {
-    tasksRepository.tasks.push(createTask(project.uuid, { plannedBudget: '900.00', actualCost: '1200.01' }));
+    tasksRepository.tasks.push(
+      createTask(project.uuid, { plannedBudget: '900.00', actualCost: '1200.01' }),
+    );
 
-    await expect(service.getProjectFinancialSummary(project.uuid, adminUser)).resolves.toMatchObject({
+    await expect(
+      service.getProjectFinancialSummary(project.uuid, adminUser),
+    ).resolves.toMatchObject({
       totalActualCost: '1200.01',
       balance: '-200.01',
       budgetExceeded: true,
@@ -126,9 +128,9 @@ describe('FinancesService', () => {
   });
 
   it('rejects project managers that do not own the project', async () => {
-    await expect(service.getProjectFinancialSummary(project.uuid, otherManagerUser)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.getProjectFinancialSummary(project.uuid, otherManagerUser),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('updates project and activity financial fields without accepting calculated totals', async () => {
@@ -177,7 +179,9 @@ describe('FinancesController validation', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
-        canActivate: (context: { switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } } }) => {
+        canActivate: (context: {
+          switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } };
+        }) => {
           context.switchToHttp().getRequest().user = adminUser;
           return true;
         },
@@ -254,6 +258,7 @@ function createUser(uuid: string, role: UserRole): User {
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 
@@ -276,6 +281,7 @@ function createProject(overrides: Partial<Project> = {}): Project {
     manager: createUser(managerUuid, UserRole.PROJECT_MANAGER),
     members: [],
     tasks: [],
+    resourceAssignments: [],
   };
 }
 
@@ -302,6 +308,7 @@ function createTask(projectUuid: string, overrides: Partial<Task> = {}): Task {
     assignments: [],
     outgoingDependencies: [],
     incomingDependencies: [],
+    resourceAssignments: [],
   };
 }
 
@@ -363,7 +370,9 @@ class InMemoryTasksRepository {
         )
         .sort((firstTask, secondTask) => {
           const dateComparison = firstTask.startDate.localeCompare(secondTask.startDate);
-          return dateComparison === 0 ? firstTask.name.localeCompare(secondTask.name) : dateComparison;
+          return dateComparison === 0
+            ? firstTask.name.localeCompare(secondTask.name)
+            : dateComparison;
         }),
     );
   }

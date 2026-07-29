@@ -15,6 +15,7 @@ import {
 
 import { TaskStatus } from '../../../common/enums/task-status.enum';
 import { Project } from '../../projects/entities/project.entity';
+import { ResourceAssignment } from '../../resource-assignments/entities/resource-assignment.entity';
 import { TaskAssignment } from '../../task-assignments/entities/task-assignment.entity';
 import { TaskDependency } from '../../task-dependencies/entities/task-dependency.entity';
 
@@ -106,4 +107,7 @@ export class Task {
 
   @OneToMany(() => TaskDependency, (taskDependency) => taskDependency.successorTask)
   incomingDependencies!: Relation<TaskDependency[]>;
+
+  @OneToMany(() => ResourceAssignment, (resourceAssignment) => resourceAssignment.task)
+  resourceAssignments!: Relation<ResourceAssignment[]>;
 }

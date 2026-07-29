@@ -114,7 +114,9 @@ describe('ExportsService', () => {
     const projectWorksheet = workbook.getWorksheet('Proyecto');
     const tasksWorksheet = workbook.getWorksheet('Actividades');
 
-    expect(projectWorksheet?.getCell('B13').value).toEqual(expect.stringContaining('America/La_Paz'));
+    expect(projectWorksheet?.getCell('B13').value).toEqual(
+      expect.stringContaining('America/La_Paz'),
+    );
     expect(formatDateTimeInLaPaz(new Date('2026-07-25T03:30:00.000Z'))).toBe(
       '2026-07-24 23:30:00 America/La_Paz',
     );
@@ -141,9 +143,9 @@ describe('ExportsService', () => {
     await expect(service.generateProjectExcel(project.uuid, managerUser)).resolves.toMatchObject({
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
-    await expect(service.generateProjectExcel(project.uuid, otherManagerUser)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.generateProjectExcel(project.uuid, otherManagerUser),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.generateProjectExcel(project.uuid, regularUser)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
@@ -211,6 +213,7 @@ function createUser(uuid: string, role: UserRole, name = 'Usuario'): User {
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 
@@ -231,6 +234,7 @@ function createProject(): Project {
     manager: createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, 'Jefe'),
     members: [],
     tasks: [],
+    resourceAssignments: [],
   };
 }
 
@@ -257,6 +261,7 @@ function createTask(overrides: Partial<Task>): Task {
     assignments: [],
     outgoingDependencies: [],
     incomingDependencies: [],
+    resourceAssignments: [],
   };
 }
 
@@ -284,7 +289,10 @@ function createAssignment(
     assignedHours,
     isMainResponsible,
     task: createTask({ uuid: taskUuid }),
-    user: createUser(userUuid, userUuid === managerUser.uuid ? UserRole.PROJECT_MANAGER : UserRole.USER),
+    user: createUser(
+      userUuid,
+      userUuid === managerUser.uuid ? UserRole.PROJECT_MANAGER : UserRole.USER,
+    ),
   };
 }
 
@@ -295,7 +303,10 @@ function createMember(projectUuid: string, userUuid: string): ProjectMember {
     userUuid,
     joinedAt: new Date('2026-07-25T03:30:00.000Z'),
     project: createProject(),
-    user: createUser(userUuid, userUuid === managerUser.uuid ? UserRole.PROJECT_MANAGER : UserRole.USER),
+    user: createUser(
+      userUuid,
+      userUuid === managerUser.uuid ? UserRole.PROJECT_MANAGER : UserRole.USER,
+    ),
   };
 }
 
@@ -304,8 +315,9 @@ class InMemoryProjectsRepository {
 
   findOne(options: { where: Partial<Project> }): Promise<Project | null> {
     return Promise.resolve(
-      this.projects.find((project) => matchesWhere(project, options.where) && project.deletedAt === null) ??
-        null,
+      this.projects.find(
+        (project) => matchesWhere(project, options.where) && project.deletedAt === null,
+      ) ?? null,
     );
   }
 }
@@ -360,9 +372,6 @@ function matchesWhere<T extends object>(entity: T, where: Partial<T>): boolean {
 
 function isFindOperatorLike(value: unknown): value is { _value: readonly unknown[] } {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    '_value' in value &&
-    Array.isArray(value._value)
+    typeof value === 'object' && value !== null && '_value' in value && Array.isArray(value._value)
   );
 }

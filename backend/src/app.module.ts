@@ -11,6 +11,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { FinancesModule } from './modules/finances/finances.module';
 import { ProjectMembersModule } from './modules/project-members/project-members.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { ResourceAssignmentsModule } from './modules/resource-assignments/resource-assignments.module';
+import { ResourcesModule } from './modules/resources/resources.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TaskAssignmentsModule } from './modules/task-assignments/task-assignments.module';
 import { TaskDependenciesModule } from './modules/task-dependencies/task-dependencies.module';
@@ -63,6 +65,8 @@ import { UsersModule } from './modules/users/users.module';
     TasksModule,
     TaskAssignmentsModule,
     TaskDependenciesModule,
+    ResourcesModule,
+    ResourceAssignmentsModule,
     FinancesModule,
     ReportsModule,
   ],

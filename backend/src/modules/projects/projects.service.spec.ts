@@ -49,7 +49,12 @@ describe('ProjectsService', () => {
       createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, true, 'Jefe PROPLAN'),
       createUser(otherManagerUser.uuid, UserRole.PROJECT_MANAGER, true, 'Jefe Alterno'),
       createUser(regularUser.uuid, UserRole.USER, true, 'Usuario PROPLAN'),
-      createUser('55555555-5555-4555-8555-555555555555', UserRole.PROJECT_MANAGER, false, 'Jefe Inactivo'),
+      createUser(
+        '55555555-5555-4555-8555-555555555555',
+        UserRole.PROJECT_MANAGER,
+        false,
+        'Jefe Inactivo',
+      ),
     ]);
     projectMembersRepository = new InMemoryProjectMembersRepository();
     tasksRepository = new InMemoryTasksRepository();
@@ -135,7 +140,10 @@ describe('ProjectsService', () => {
   });
 
   it('prevents project managers from modifying projects owned by another manager', async () => {
-    const project = await service.create(createProjectInput({ managerUuid: managerUser.uuid }), adminUser);
+    const project = await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid }),
+      adminUser,
+    );
 
     await expect(
       service.update(project.uuid, { name: 'Cambio rechazado' }, otherManagerUser),
@@ -143,10 +151,17 @@ describe('ProjectsService', () => {
   });
 
   it('allows administrators to update any project and reassign its manager', async () => {
-    const project = await service.create(createProjectInput({ managerUuid: managerUser.uuid }), adminUser);
+    const project = await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid }),
+      adminUser,
+    );
 
     await expect(
-      service.update(project.uuid, { name: 'Proyecto Ajustado', managerUuid: otherManagerUser.uuid }, adminUser),
+      service.update(
+        project.uuid,
+        { name: 'Proyecto Ajustado', managerUuid: otherManagerUser.uuid },
+        adminUser,
+      ),
     ).resolves.toMatchObject({
       name: 'Proyecto Ajustado',
       managerUuid: otherManagerUser.uuid,
@@ -160,7 +175,10 @@ describe('ProjectsService', () => {
   });
 
   it('rejects project date updates that would leave activities outside the project range', async () => {
-    const project = await service.create(createProjectInput({ managerUuid: managerUser.uuid }), adminUser);
+    const project = await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid }),
+      adminUser,
+    );
     tasksRepository.tasks.push(
       createTask({
         projectUuid: project.uuid,
@@ -172,16 +190,23 @@ describe('ProjectsService', () => {
 
     await expect(
       service.update(project.uuid, { endDate: '2026-08-15' }, adminUser),
-    ).rejects.toThrow('El proyecto no puede dejar fuera de rango a la actividad "Actividad de analisis".');
+    ).rejects.toThrow(
+      'El proyecto no puede dejar fuera de rango a la actividad "Actividad de analisis".',
+    );
   });
 
   it('soft deletes projects and excludes them from normal listings', async () => {
-    const project = await service.create(createProjectInput({ managerUuid: managerUser.uuid }), adminUser);
+    const project = await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid }),
+      adminUser,
+    );
 
     await service.remove(project.uuid, adminUser);
 
     expect(projectsRepository.projects[0]?.deletedAt).toBeInstanceOf(Date);
-    await expect(service.findOne(project.uuid, adminUser)).rejects.toThrow('Proyecto no encontrado.');
+    await expect(service.findOne(project.uuid, adminUser)).rejects.toThrow(
+      'Proyecto no encontrado.',
+    );
 
     const list = await service.findAll(
       { page: 1, limit: 10, orderBy: ProjectSortField.CREATED_AT, order: SortOrder.DESC },
@@ -191,7 +216,10 @@ describe('ProjectsService', () => {
   });
 
   it('limits project managers to projects under their responsibility', async () => {
-    await service.create(createProjectInput({ managerUuid: managerUser.uuid, name: 'Proyecto Propio' }), adminUser);
+    await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid, name: 'Proyecto Propio' }),
+      adminUser,
+    );
     await service.create(
       createProjectInput({ managerUuid: otherManagerUser.uuid, name: 'Proyecto Ajeno' }),
       adminUser,
@@ -224,7 +252,9 @@ describe('ProjectsController UUID validation', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
-        canActivate: (context: { switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } } }) => {
+        canActivate: (context: {
+          switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } };
+        }) => {
           context.switchToHttp().getRequest().user = adminUser;
           return true;
         },
@@ -290,6 +320,7 @@ function createUser(uuid: string, role: UserRole, isActive: boolean, name: strin
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 
@@ -319,6 +350,7 @@ function createProjectRelation(): Project {
     manager: createUserRelation(),
     members: [],
     tasks: [],
+    resourceAssignments: [],
   };
 }
 
@@ -345,6 +377,7 @@ function createTask(overrides: Partial<Task> = {}): Task {
     assignments: overrides.assignments ?? [],
     outgoingDependencies: overrides.outgoingDependencies ?? [],
     incomingDependencies: overrides.incomingDependencies ?? [],
+    resourceAssignments: overrides.resourceAssignments ?? [],
   };
 }
 
@@ -448,6 +481,7 @@ class InMemoryProjectsRepository {
       manager: input.manager ?? createUserRelation(),
       members: input.members ?? [],
       tasks: [],
+      resourceAssignments: [],
     };
   }
 
@@ -509,7 +543,9 @@ class InMemoryProjectsRepository {
     }
 
     project.manager = manager;
-    project.members = this.membersRepository.members.filter((member) => member.projectUuid === project.uuid);
+    project.members = this.membersRepository.members.filter(
+      (member) => member.projectUuid === project.uuid,
+    );
 
     return project;
   }
@@ -588,7 +624,8 @@ class InMemoryProjectQueryBuilder {
       if (
         this.memberUserUuid !== undefined &&
         !this.membersRepository.members.some(
-          (member) => member.projectUuid === project.uuid && member.userUuid === this.memberUserUuid,
+          (member) =>
+            member.projectUuid === project.uuid && member.userUuid === this.memberUserUuid,
         )
       ) {
         return false;

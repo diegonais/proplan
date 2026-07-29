@@ -151,6 +151,7 @@ function createUser(uuid: string, role: UserRole, name = 'Usuario'): User {
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 
@@ -171,6 +172,7 @@ function createProject(): Project {
     manager: createUser(managerUser.uuid, UserRole.PROJECT_MANAGER, 'Jefe'),
     members: [],
     tasks: [],
+    resourceAssignments: [],
   };
 }
 
@@ -197,6 +199,7 @@ function createTask(overrides: Partial<Task>): Task {
     assignments: [],
     outgoingDependencies: [],
     incomingDependencies: [],
+    resourceAssignments: [],
   };
 }
 
@@ -211,7 +214,11 @@ function createDependency(predecessorTaskUuid: string, successorTaskUuid: string
   };
 }
 
-function createAssignment(taskUuid: string, userUuid: string, assignedHours: string): TaskAssignment {
+function createAssignment(
+  taskUuid: string,
+  userUuid: string,
+  assignedHours: string,
+): TaskAssignment {
   return {
     uuid: `${taskUuid}-${userUuid}`,
     taskUuid,
@@ -230,7 +237,10 @@ function createMember(projectUuid: string, userUuid: string): ProjectMember {
     userUuid,
     joinedAt: new Date('2026-07-24T18:30:00.000Z'),
     project: createProject(),
-    user: createUser(userUuid, userUuid === managerUser.uuid ? UserRole.PROJECT_MANAGER : UserRole.USER),
+    user: createUser(
+      userUuid,
+      userUuid === managerUser.uuid ? UserRole.PROJECT_MANAGER : UserRole.USER,
+    ),
   };
 }
 
@@ -239,8 +249,9 @@ class InMemoryProjectsRepository {
 
   findOne(options: { where: Partial<Project> }): Promise<Project | null> {
     return Promise.resolve(
-      this.projects.find((project) => matchesWhere(project, options.where) && project.deletedAt === null) ??
-        null,
+      this.projects.find(
+        (project) => matchesWhere(project, options.where) && project.deletedAt === null,
+      ) ?? null,
     );
   }
 }
@@ -371,9 +382,6 @@ function matchesWhere<T extends object>(entity: T, where: Partial<T>): boolean {
 
 function isFindOperatorLike(value: unknown): value is { _value: readonly unknown[] } {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    '_value' in value &&
-    Array.isArray(value._value)
+    typeof value === 'object' && value !== null && '_value' in value && Array.isArray(value._value)
   );
 }

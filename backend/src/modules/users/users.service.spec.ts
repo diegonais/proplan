@@ -41,9 +41,9 @@ describe('UsersService', () => {
     expect(user).not.toHaveProperty('passwordHash');
     expect(storedUser).toBeDefined();
     expect(storedUser?.passwordHash).not.toBe('TemporalPassword123');
-    await expect(bcrypt.compare('TemporalPassword123', storedUser?.passwordHash ?? '')).resolves.toBe(
-      true,
-    );
+    await expect(
+      bcrypt.compare('TemporalPassword123', storedUser?.passwordHash ?? ''),
+    ).resolves.toBe(true);
   });
 
   it('rejects duplicated emails', async () => {
@@ -105,7 +105,9 @@ describe('UsersService', () => {
       role: UserRole.ADMIN,
     });
 
-    await expect(service.updateStatus(admin.uuid, false)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.updateStatus(admin.uuid, false)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('prevents changing the role of the last active administrator', async () => {
@@ -176,6 +178,7 @@ class InMemoryUsersRepository {
       managedProjects: [],
       projectMemberships: [],
       taskAssignments: [],
+      resourceAssignmentsCreated: [],
     };
   }
 
@@ -197,7 +200,7 @@ class InMemoryUsersRepository {
     return Promise.resolve(
       this.users.find((user) =>
         Object.entries(options.where).every(([key, value]) => user[key as keyof User] === value),
-      ) ?? null
+      ) ?? null,
     );
   }
 

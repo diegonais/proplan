@@ -15,6 +15,7 @@ import {
 
 import { ProjectStatus } from '../../../common/enums/project-status.enum';
 import { ProjectMember } from '../../project-members/entities/project-member.entity';
+import { ResourceAssignment } from '../../resource-assignments/entities/resource-assignment.entity';
 import { Task } from '../../tasks/entities/task.entity';
 import { User } from '../../users/entities/user.entity';
 
@@ -78,4 +79,7 @@ export class Project {
 
   @OneToMany(() => Task, (task) => task.project)
   tasks!: Relation<Task[]>;
+
+  @OneToMany(() => ResourceAssignment, (resourceAssignment) => resourceAssignment.project)
+  resourceAssignments!: Relation<ResourceAssignment[]>;
 }

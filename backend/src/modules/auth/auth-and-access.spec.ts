@@ -301,6 +301,7 @@ function createUser(input: {
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 

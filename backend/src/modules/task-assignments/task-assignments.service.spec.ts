@@ -72,8 +72,12 @@ describe('Project members and task assignments rules', () => {
       dataSource as unknown as DataSource,
     );
 
-    await membersRepository.save(membersRepository.create({ projectUuid: project.uuid, userUuid: managerUser.uuid }));
-    await membersRepository.save(membersRepository.create({ projectUuid: project.uuid, userUuid: regularUser.uuid }));
+    await membersRepository.save(
+      membersRepository.create({ projectUuid: project.uuid, userUuid: managerUser.uuid }),
+    );
+    await membersRepository.save(
+      membersRepository.create({ projectUuid: project.uuid, userUuid: regularUser.uuid }),
+    );
     task = await tasksRepository.save(createTask(project.uuid));
   });
 
@@ -112,10 +116,18 @@ describe('Project members and task assignments rules', () => {
   });
 
   it('rejects duplicated task assignments', async () => {
-    await assignmentsService.create(task.uuid, { userUuid: regularUser.uuid, assignedHours: 8 }, managerUser);
+    await assignmentsService.create(
+      task.uuid,
+      { userUuid: regularUser.uuid, assignedHours: 8 },
+      managerUser,
+    );
 
     await expect(
-      assignmentsService.create(task.uuid, { userUuid: regularUser.uuid, assignedHours: 2 }, managerUser),
+      assignmentsService.create(
+        task.uuid,
+        { userUuid: regularUser.uuid, assignedHours: 2 },
+        managerUser,
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -134,33 +146,53 @@ describe('Project members and task assignments rules', () => {
       managerUser,
     );
 
-    expect(assignmentsRepository.assignments.filter((assignment) => assignment.isMainResponsible)).toHaveLength(1);
-    expect(assignmentsRepository.assignments.find((assignment) => assignment.isMainResponsible)?.userUuid).toBe(
-      otherRegularUser.uuid,
-    );
+    expect(
+      assignmentsRepository.assignments.filter((assignment) => assignment.isMainResponsible),
+    ).toHaveLength(1);
+    expect(
+      assignmentsRepository.assignments.find((assignment) => assignment.isMainResponsible)
+        ?.userUuid,
+    ).toBe(otherRegularUser.uuid);
     expect(dataSource.transactionCalls).toBe(2);
 
     await assignmentsService.setMainResponsible(task.uuid, regularUser.uuid, managerUser);
 
-    expect(assignmentsRepository.assignments.filter((assignment) => assignment.isMainResponsible)).toHaveLength(1);
-    expect(assignmentsRepository.assignments.find((assignment) => assignment.isMainResponsible)?.userUuid).toBe(
-      regularUser.uuid,
-    );
+    expect(
+      assignmentsRepository.assignments.filter((assignment) => assignment.isMainResponsible),
+    ).toHaveLength(1);
+    expect(
+      assignmentsRepository.assignments.find((assignment) => assignment.isMainResponsible)
+        ?.userUuid,
+    ).toBe(regularUser.uuid);
     expect(dataSource.transactionCalls).toBe(3);
   });
 
   it('rejects removing a member with active assignments', async () => {
-    await assignmentsService.create(task.uuid, { userUuid: regularUser.uuid, assignedHours: 8 }, managerUser);
-
-    await expect(membersService.remove(project.uuid, regularUser.uuid, managerUser)).rejects.toThrow(
-      'asignaciones activas',
+    await assignmentsService.create(
+      task.uuid,
+      { userUuid: regularUser.uuid, assignedHours: 8 },
+      managerUser,
     );
+
+    await expect(
+      membersService.remove(project.uuid, regularUser.uuid, managerUser),
+    ).rejects.toThrow('asignaciones activas');
   });
 
   it('calculates workload as the sum of assigned hours', async () => {
-    await assignmentsService.create(task.uuid, { userUuid: regularUser.uuid, assignedHours: 8 }, managerUser);
-    const secondTask = await tasksRepository.save(createTask(project.uuid, { name: 'Actividad secundaria' }));
-    await assignmentsService.create(secondTask.uuid, { userUuid: regularUser.uuid, assignedHours: 2.5 }, managerUser);
+    await assignmentsService.create(
+      task.uuid,
+      { userUuid: regularUser.uuid, assignedHours: 8 },
+      managerUser,
+    );
+    const secondTask = await tasksRepository.save(
+      createTask(project.uuid, { name: 'Actividad secundaria' }),
+    );
+    await assignmentsService.create(
+      secondTask.uuid,
+      { userUuid: regularUser.uuid, assignedHours: 2.5 },
+      managerUser,
+    );
 
     await expect(membersService.getWorkload(project.uuid, managerUser)).resolves.toContainEqual(
       expect.objectContaining({
@@ -186,15 +218,27 @@ describe('Project members and task assignments rules', () => {
 
   it('enforces task assignment management permissions by role', async () => {
     await expect(
-      assignmentsService.create(task.uuid, { userUuid: regularUser.uuid, assignedHours: 8 }, adminUser),
+      assignmentsService.create(
+        task.uuid,
+        { userUuid: regularUser.uuid, assignedHours: 8 },
+        adminUser,
+      ),
     ).resolves.toMatchObject({ userUuid: regularUser.uuid });
 
     await expect(
-      assignmentsService.create(task.uuid, { userUuid: managerUser.uuid, assignedHours: 1 }, otherManagerUser),
+      assignmentsService.create(
+        task.uuid,
+        { userUuid: managerUser.uuid, assignedHours: 1 },
+        otherManagerUser,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     await expect(
-      assignmentsService.create(task.uuid, { userUuid: managerUser.uuid, assignedHours: 1 }, regularUser),
+      assignmentsService.create(
+        task.uuid,
+        { userUuid: managerUser.uuid, assignedHours: 1 },
+        regularUser,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
@@ -222,6 +266,7 @@ function createUser(uuid: string, role: UserRole, isActive: boolean, name: strin
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 
@@ -239,9 +284,15 @@ function createProject(overrides: Partial<Project> = {}): Project {
     createdAt: new Date('2026-07-24T18:30:00.000Z'),
     updatedAt: new Date('2026-07-24T18:30:00.000Z'),
     deletedAt: null,
-    manager: createUser(overrides.managerUuid ?? managerUser.uuid, UserRole.PROJECT_MANAGER, true, 'Jefe'),
+    manager: createUser(
+      overrides.managerUuid ?? managerUser.uuid,
+      UserRole.PROJECT_MANAGER,
+      true,
+      'Jefe',
+    ),
     members: [],
     tasks: [],
+    resourceAssignments: [],
   };
 }
 
@@ -268,6 +319,7 @@ function createTask(projectUuid: string, overrides: Partial<Task> = {}): Task {
     assignments: [],
     outgoingDependencies: [],
     incomingDependencies: [],
+    resourceAssignments: [],
   };
 }
 
@@ -286,7 +338,9 @@ class InMemoryUsersRepository {
     return Promise.resolve(
       this.users
         .filter((user) =>
-          Object.entries(options.where ?? {}).every(([key, value]) => user[key as keyof User] === value),
+          Object.entries(options.where ?? {}).every(
+            ([key, value]) => user[key as keyof User] === value,
+          ),
         )
         .sort((firstUser, secondUser) => firstUser.name.localeCompare(secondUser.name)),
     );
@@ -327,7 +381,8 @@ class InMemoryProjectMembersRepository {
 
   async save(member: ProjectMember): Promise<ProjectMember> {
     const existingMember = this.members.find(
-      (candidate) => candidate.projectUuid === member.projectUuid && candidate.userUuid === member.userUuid,
+      (candidate) =>
+        candidate.projectUuid === member.projectUuid && candidate.userUuid === member.userUuid,
     );
 
     if (existingMember !== undefined) {
@@ -353,7 +408,11 @@ class InMemoryProjectMembersRepository {
     );
   }
 
-  find(options: { where: Partial<ProjectMember>; relations?: unknown; order?: unknown }): Promise<ProjectMember[]> {
+  find(options: {
+    where: Partial<ProjectMember>;
+    relations?: unknown;
+    order?: unknown;
+  }): Promise<ProjectMember[]> {
     return Promise.all(
       this.members
         .filter((member) =>
@@ -439,7 +498,9 @@ class InMemoryTaskAssignmentsRepository {
     }
 
     await this.attachRelations(assignment);
-    const existingIndex = this.assignments.findIndex((candidate) => candidate.uuid === assignment.uuid);
+    const existingIndex = this.assignments.findIndex(
+      (candidate) => candidate.uuid === assignment.uuid,
+    );
 
     if (existingIndex === -1) {
       this.assignments.push(assignment);
@@ -450,7 +511,10 @@ class InMemoryTaskAssignmentsRepository {
     return assignment;
   }
 
-  async findOne(options: { where: Partial<TaskAssignment>; relations?: unknown }): Promise<TaskAssignment | null> {
+  async findOne(options: {
+    where: Partial<TaskAssignment>;
+    relations?: unknown;
+  }): Promise<TaskAssignment | null> {
     const assignment =
       this.assignments.find((candidate) =>
         Object.entries(options.where).every(
@@ -466,7 +530,11 @@ class InMemoryTaskAssignmentsRepository {
     return assignment;
   }
 
-  find(options: { where: Partial<TaskAssignment>; relations?: unknown; order?: unknown }): Promise<TaskAssignment[]> {
+  find(options: {
+    where: Partial<TaskAssignment>;
+    relations?: unknown;
+    order?: unknown;
+  }): Promise<TaskAssignment[]> {
     return Promise.all(
       this.assignments
         .filter((assignment) =>

@@ -111,7 +111,11 @@ describe('Tasks and task dependencies rules', () => {
     });
 
     await expect(
-      tasksService.create(project.uuid, createTaskInput({ parentTaskUuid: parent.uuid }), managerUser),
+      tasksService.create(
+        project.uuid,
+        createTaskInput({ parentTaskUuid: parent.uuid }),
+        managerUser,
+      ),
     ).rejects.toThrow('mismo proyecto');
   });
 
@@ -145,29 +149,37 @@ describe('Tasks and task dependencies rules', () => {
 
   it('rejects COMPLETED without progress 100', async () => {
     await expect(
-      tasksService.create(project.uuid, createTaskInput({ status: TaskStatus.COMPLETED, progress: 80 }), managerUser),
+      tasksService.create(
+        project.uuid,
+        createTaskInput({ status: TaskStatus.COMPLETED, progress: 80 }),
+        managerUser,
+      ),
     ).rejects.toThrow('progreso 100');
   });
 
   it('enforces project management permissions by role', async () => {
-    await expect(tasksService.create(project.uuid, createTaskInput(), otherManagerUser)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      tasksService.create(project.uuid, createTaskInput(), otherManagerUser),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(tasksService.findAll(project.uuid, regularUser)).resolves.toEqual([]);
-    await expect(tasksService.create(project.uuid, createTaskInput(), regularUser)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      tasksService.create(project.uuid, createTaskInput(), regularUser),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('soft deletes activities and rejects deletion with active subactivities', async () => {
     const parent = await saveTask(tasksRepository, project.uuid);
     const child = await saveTask(tasksRepository, project.uuid, { parentTaskUuid: parent.uuid });
 
-    await expect(tasksService.remove(parent.uuid, managerUser)).rejects.toThrow('subactividades activas');
+    await expect(tasksService.remove(parent.uuid, managerUser)).rejects.toThrow(
+      'subactividades activas',
+    );
 
     await tasksService.remove(child.uuid, managerUser);
 
-    expect(tasksRepository.tasks.find((task) => task.uuid === child.uuid)?.deletedAt).toBeInstanceOf(Date);
+    expect(
+      tasksRepository.tasks.find((task) => task.uuid === child.uuid)?.deletedAt,
+    ).toBeInstanceOf(Date);
   });
 
   it('allows assigned users to update only their activity status and progress', async () => {
@@ -226,7 +238,11 @@ describe('Tasks and task dependencies rules', () => {
     );
 
     await expect(
-      taskDependenciesService.create(successor.uuid, { predecessorTaskUuid: predecessor.uuid }, managerUser),
+      taskDependenciesService.create(
+        successor.uuid,
+        { predecessorTaskUuid: predecessor.uuid },
+        managerUser,
+      ),
     ).rejects.toThrow('ya existe');
   });
 
@@ -241,7 +257,11 @@ describe('Tasks and task dependencies rules', () => {
     });
 
     await expect(
-      taskDependenciesService.create(successor.uuid, { predecessorTaskUuid: predecessor.uuid }, managerUser),
+      taskDependenciesService.create(
+        successor.uuid,
+        { predecessorTaskUuid: predecessor.uuid },
+        managerUser,
+      ),
     ).rejects.toThrow('mismo proyecto');
   });
 
@@ -271,7 +291,11 @@ describe('Tasks and task dependencies rules', () => {
     );
 
     await expect(
-      taskDependenciesService.create(firstTask.uuid, { predecessorTaskUuid: thirdTask.uuid }, managerUser),
+      taskDependenciesService.create(
+        firstTask.uuid,
+        { predecessorTaskUuid: thirdTask.uuid },
+        managerUser,
+      ),
     ).rejects.toThrow('ciclos');
   });
 
@@ -286,7 +310,11 @@ describe('Tasks and task dependencies rules', () => {
     });
 
     await expect(
-      taskDependenciesService.create(successor.uuid, { predecessorTaskUuid: predecessor.uuid }, managerUser),
+      taskDependenciesService.create(
+        successor.uuid,
+        { predecessorTaskUuid: predecessor.uuid },
+        managerUser,
+      ),
     ).rejects.toThrow('fin de la predecesora');
   });
 });
@@ -310,7 +338,9 @@ describe('TasksController restricted user progress endpoint', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
-        canActivate: (context: { switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } } }) => {
+        canActivate: (context: {
+          switchToHttp: () => { getRequest: () => { user: AuthenticatedUser } };
+        }) => {
           context.switchToHttp().getRequest().user = regularUser;
           return true;
         },
@@ -392,6 +422,7 @@ function createUser(uuid: string, role: UserRole): User {
     managedProjects: [],
     projectMemberships: [],
     taskAssignments: [],
+    resourceAssignmentsCreated: [],
   };
 }
 
@@ -414,6 +445,7 @@ function createProject(overrides: Partial<Project>): Project {
     manager: createUser(managerUuid, UserRole.PROJECT_MANAGER),
     members: [],
     tasks: [],
+    resourceAssignments: [],
   };
 }
 
@@ -451,6 +483,7 @@ function createTask(projectUuid: string, overrides: Partial<Task> = {}): Task {
     assignments: [],
     outgoingDependencies: [],
     incomingDependencies: [],
+    resourceAssignments: [],
   };
 }
 
@@ -611,7 +644,10 @@ class InMemoryTaskDependenciesRepository {
     return Promise.resolve(dependency);
   }
 
-  findOne(options: { where: Partial<TaskDependency>; relations?: unknown }): Promise<TaskDependency | null> {
+  findOne(options: {
+    where: Partial<TaskDependency>;
+    relations?: unknown;
+  }): Promise<TaskDependency | null> {
     const dependency =
       this.dependencies.find((candidate) =>
         Object.entries(options.where).every(
@@ -622,7 +658,10 @@ class InMemoryTaskDependenciesRepository {
     return Promise.resolve(dependency === null ? null : this.attachRelations(dependency));
   }
 
-  find(options: { where: Partial<TaskDependency>; relations?: unknown }): Promise<TaskDependency[]> {
+  find(options: {
+    where: Partial<TaskDependency>;
+    relations?: unknown;
+  }): Promise<TaskDependency[]> {
     return Promise.resolve(
       this.dependencies
         .filter((dependency) =>

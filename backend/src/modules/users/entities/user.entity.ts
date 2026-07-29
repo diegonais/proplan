@@ -14,6 +14,7 @@ import {
 import { UserRole } from '../../../common/enums/user-role.enum';
 import { ProjectMember } from '../../project-members/entities/project-member.entity';
 import { Project } from '../../projects/entities/project.entity';
+import { ResourceAssignment } from '../../resource-assignments/entities/resource-assignment.entity';
 import { TaskAssignment } from '../../task-assignments/entities/task-assignment.entity';
 
 const emailNormalizer: ValueTransformer = {
@@ -61,4 +62,7 @@ export class User {
 
   @OneToMany(() => TaskAssignment, (taskAssignment) => taskAssignment.user)
   taskAssignments!: Relation<TaskAssignment[]>;
+
+  @OneToMany(() => ResourceAssignment, (resourceAssignment) => resourceAssignment.assignedBy)
+  resourceAssignmentsCreated!: Relation<ResourceAssignment[]>;
 }
