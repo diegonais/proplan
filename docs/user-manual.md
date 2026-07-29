@@ -182,6 +182,8 @@ El Gantt muestra:
 - Fechas de inicio y fin.
 - Progreso.
 - Dependencias `FINISH_TO_START`.
+- Calendario horizontal por mes y dia para ubicar visualmente cada actividad.
+- Tabla de detalle con fecha inicial, fecha final, duracion, estado y avance.
 
 Usar esta vista para explicar el cronograma, los bloqueos y la secuencia del trabajo.
 
@@ -192,11 +194,10 @@ Usar esta vista para explicar el cronograma, los bloqueos y la secuencia del tra
 Reportes disponibles:
 
 - Dashboard general por rol.
-- Estado general del proyecto.
-- Semaforo verde, amarillo o rojo.
-- Carga de trabajo por persona del equipo humano.
-- Presupuesto versus costo real.
-- Gantt del proyecto.
+- Diagrama de Gantt del proyecto.
+- Carga de trabajo por recurso humano.
+- Presupuesto versus costos reales.
+- Estado general del proyecto con semaforo verde, amarillo o rojo.
 - Utilizacion de recursos.
 
 Escenarios del seed demo:

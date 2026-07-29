@@ -199,7 +199,9 @@ export function ReportsPage() {
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
             <Tab label="Diagrama de Gantt" />
-            <Tab label="Indicadores y exportaciones" />
+            <Tab label="Carga de trabajo por recurso" />
+            <Tab label="Presupuesto vs costos reales" disabled={!canViewFinancialDetails} />
+            <Tab label="Estado general" />
             <Tab label="Utilizacion de recursos" />
           </Tabs>
           <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -208,9 +210,24 @@ export function ReportsPage() {
               <ProjectReportsTab
                 project={selectedProject}
                 canViewFinancialDetails={canViewFinancialDetails}
+                reportType="workload"
               />
             ) : null}
-            {selectedReportTab === 2 ? (
+            {selectedReportTab === 2 && canViewFinancialDetails ? (
+              <ProjectReportsTab
+                project={selectedProject}
+                canViewFinancialDetails={canViewFinancialDetails}
+                reportType="budget"
+              />
+            ) : null}
+            {selectedReportTab === 3 ? (
+              <ProjectReportsTab
+                project={selectedProject}
+                canViewFinancialDetails={canViewFinancialDetails}
+                reportType="status"
+              />
+            ) : null}
+            {selectedReportTab === 4 ? (
               <ResourceUtilizationReportTab project={selectedProject} />
             ) : null}
           </Box>

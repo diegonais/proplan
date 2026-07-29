@@ -1,4 +1,5 @@
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import {
   Box,
@@ -6,6 +7,12 @@ import {
   LinearProgress,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -20,10 +27,27 @@ interface GanttChartProps {
   compact?: boolean;
 }
 
-const dayWidth = 28;
+interface TimelineDay {
+  isoDate: string;
+  dayOfMonth: string;
+  weekdayLabel: string;
+  isWeekend: boolean;
+  isToday: boolean;
+}
+
+interface MonthSegment {
+  key: string;
+  label: string;
+  startIndex: number;
+  span: number;
+}
+
+const dayWidth = 42;
+const activityColumnWidth = 300;
 
 export function GanttChart({ report, compact = false }: GanttChartProps) {
-  const totalDays = daysBetweenInclusive(report.projectStartDate, report.projectEndDate);
+  const timelineDays = buildTimelineDays(report.projectStartDate, report.projectEndDate);
+  const monthSegments = buildMonthSegments(timelineDays);
   const rows = compact ? report.tasks.slice(0, 6) : report.tasks;
 
   if (report.tasks.length === 0) {
@@ -35,29 +59,86 @@ export function GanttChart({ report, compact = false }: GanttChartProps) {
   }
 
   return (
-    <Stack spacing={2}>
-      <Box sx={{ overflowX: 'auto' }}>
-        <Box
-          sx={{
-            minWidth: Math.max(totalDays * dayWidth + 280, 680),
-            display: 'grid',
-            gridTemplateColumns: '260px 1fr',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.paper',
-          }}
-        >
-          <HeaderCell>Actividad</HeaderCell>
-          <HeaderCell>
-            {formatDateOnlyForDisplay(report.projectStartDate)} a{' '}
-            {formatDateOnlyForDisplay(report.projectEndDate)}
-          </HeaderCell>
-          {rows.map((task) => (
-            <GanttRow key={task.uuid} task={task} projectStartDate={report.projectStartDate} />
-          ))}
+    <Stack spacing={2.5}>
+      <Stack spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <CalendarMonthOutlinedIcon color="primary" aria-hidden="true" />
+          <Typography variant="h6">Calendario del proyecto</Typography>
+        </Stack>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Box
+            sx={{
+              minWidth: activityColumnWidth + timelineDays.length * dayWidth,
+              display: 'grid',
+              gridTemplateColumns: `${String(activityColumnWidth)}px repeat(${String(
+                timelineDays.length,
+              )}, ${String(dayWidth)}px)`,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+            }}
+          >
+            <HeaderCell sx={{ gridColumn: '1', gridRow: '1 / span 2' }}>Actividad</HeaderCell>
+            {monthSegments.map((segment) => (
+              <HeaderCell
+                key={segment.key}
+                sx={{
+                  gridColumn: `${String(segment.startIndex + 2)} / span ${String(segment.span)}`,
+                  gridRow: '1',
+                  textAlign: 'center',
+                }}
+              >
+                {segment.label}
+              </HeaderCell>
+            ))}
+            {timelineDays.map((day, index) => (
+              <HeaderDayCell key={day.isoDate} day={day} columnIndex={index + 2} />
+            ))}
+            {rows.map((task, index) => (
+              <GanttRow
+                key={task.uuid}
+                task={task}
+                timelineDays={timelineDays}
+                rowIndex={index + 3}
+                projectStartDate={report.projectStartDate}
+              />
+            ))}
+          </Box>
         </Box>
-      </Box>
+      </Stack>
+
+      <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+        <Table aria-label="Detalle calendario de actividades">
+          <TableHead>
+            <TableRow>
+              <TableCell>Actividad</TableCell>
+              <TableCell>Fecha inicial</TableCell>
+              <TableCell>Fecha final</TableCell>
+              <TableCell align="right">Duracion</TableCell>
+              <TableCell>Estado</TableCell>
+              <TableCell align="right">Avance</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((task) => (
+              <TableRow key={task.uuid} hover>
+                <TableCell>
+                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ pl: task.level * 2 }}>
+                    {task.level > 0 ? <AccountTreeOutlinedIcon color="action" fontSize="small" /> : null}
+                    <Typography sx={{ fontWeight: 700 }}>{task.name}</Typography>
+                  </Stack>
+                </TableCell>
+                <TableCell>{formatDateOnlyForDisplay(task.startDate)}</TableCell>
+                <TableCell>{formatDateOnlyForDisplay(task.endDate)}</TableCell>
+                <TableCell align="right">{daysBetweenInclusive(task.startDate, task.endDate)} dias</TableCell>
+                <TableCell>{getTaskStatusLabel(task.status)}</TableCell>
+                <TableCell align="right">{task.progress}%</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {!compact ? (
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -87,16 +168,19 @@ export function GanttChart({ report, compact = false }: GanttChartProps) {
   );
 }
 
-function HeaderCell({ children }: { children: ReactNode }) {
+function HeaderCell({ children, sx }: { children: ReactNode; sx?: object }) {
   return (
     <Box
       sx={{
-        px: 2,
-        py: 1.5,
+        px: 1.5,
+        py: 1,
         borderBottom: 1,
+        borderRight: 1,
         borderColor: 'divider',
         bgcolor: 'action.hover',
-        fontWeight: 700,
+        display: 'flex',
+        alignItems: 'center',
+        ...sx,
       }}
     >
       <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -106,10 +190,46 @@ function HeaderCell({ children }: { children: ReactNode }) {
   );
 }
 
-function GanttRow({ task, projectStartDate }: { task: GanttTaskReportItem; projectStartDate: string }) {
+function HeaderDayCell({ day, columnIndex }: { day: TimelineDay; columnIndex: number }) {
+  return (
+    <Box
+      sx={{
+        gridColumn: String(columnIndex),
+        gridRow: '2',
+        borderBottom: 1,
+        borderRight: 1,
+        borderColor: 'divider',
+        bgcolor: day.isToday ? 'primary.light' : day.isWeekend ? 'action.hover' : 'background.paper',
+        color: day.isToday ? 'primary.contrastText' : 'text.primary',
+        minHeight: 56,
+        px: 0.5,
+        py: 0.75,
+        textAlign: 'center',
+      }}
+    >
+      <Typography variant="caption" component="div" sx={{ fontWeight: 700 }}>
+        {day.dayOfMonth}
+      </Typography>
+      <Typography variant="caption" component="div">
+        {day.weekdayLabel}
+      </Typography>
+    </Box>
+  );
+}
+
+function GanttRow({
+  task,
+  timelineDays,
+  rowIndex,
+  projectStartDate,
+}: {
+  task: GanttTaskReportItem;
+  timelineDays: readonly TimelineDay[];
+  rowIndex: number;
+  projectStartDate: string;
+}) {
   const offset = daysBetweenInclusive(projectStartDate, task.startDate) - 1;
   const duration = daysBetweenInclusive(task.startDate, task.endDate);
-  const displayedDays = daysBetweenInclusive(projectStartDate, task.endDate);
   const gridStart = Math.max(offset + 1, 1);
   const gridSpan = Math.max(duration, 1);
 
@@ -117,10 +237,13 @@ function GanttRow({ task, projectStartDate }: { task: GanttTaskReportItem; proje
     <>
       <Box
         sx={{
-          minHeight: 58,
+          gridColumn: '1',
+          gridRow: String(rowIndex),
+          minHeight: 64,
           px: 2,
           py: 1.25,
           borderBottom: 1,
+          borderRight: 1,
           borderColor: 'divider',
           display: 'flex',
           alignItems: 'center',
@@ -134,35 +257,58 @@ function GanttRow({ task, projectStartDate }: { task: GanttTaskReportItem; proje
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" noWrap>
-            {getTaskStatusLabel(task.status)} - {task.startDate} a {task.endDate}
+            {formatDateOnlyForDisplay(task.startDate)} a {formatDateOnlyForDisplay(task.endDate)}
           </Typography>
         </Stack>
       </Box>
       <Box
         sx={{
-          minHeight: 58,
-          px: 1,
-          py: 1.25,
+          gridColumn: `2 / span ${String(timelineDays.length)}`,
+          gridRow: String(rowIndex),
+          minHeight: 64,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${String(timelineDays.length)}, ${String(dayWidth)}px)`,
+          alignItems: 'center',
           borderBottom: 1,
           borderColor: 'divider',
-          display: 'grid',
-          gridTemplateColumns: `repeat(${String(Math.max(displayedDays, 1))}, ${String(dayWidth)}px)`,
-          alignItems: 'center',
+          position: 'relative',
         }}
       >
-        <Tooltip title={`${String(task.progress)}% completado`}>
+        {timelineDays.map((day) => (
+          <Box
+            key={day.isoDate}
+            sx={{
+              minHeight: 64,
+              borderRight: 1,
+              borderColor: 'divider',
+              bgcolor: day.isToday
+                ? 'rgba(25, 118, 210, 0.10)'
+                : day.isWeekend
+                  ? 'action.hover'
+                  : 'transparent',
+            }}
+          />
+        ))}
+        <Tooltip
+          title={`${task.name}: ${formatDateOnlyForDisplay(task.startDate)} a ${formatDateOnlyForDisplay(
+            task.endDate,
+          )}. ${String(task.progress)}% completado.`}
+        >
           <Box
             sx={{
               gridColumn: `${String(gridStart)} / span ${String(gridSpan)}`,
+              gridRow: '1',
               borderRadius: 1,
               border: 1,
               borderColor: 'primary.main',
               bgcolor: 'background.default',
               overflow: 'hidden',
-              minHeight: 28,
+              minHeight: 32,
               display: 'flex',
               alignItems: 'center',
               px: 1,
+              mx: 0.5,
+              zIndex: 1,
             }}
           >
             <LinearProgress
@@ -180,12 +326,88 @@ function GanttRow({ task, projectStartDate }: { task: GanttTaskReportItem; proje
   );
 }
 
+function buildTimelineDays(startDate: string, endDate: string): TimelineDay[] {
+  const days: TimelineDay[] = [];
+  const current = toUtcNoonDate(startDate);
+  const end = toUtcNoonDate(endDate);
+  const todayIsoDate = getTodayIsoDate();
+  const weekdayFormatter = new Intl.DateTimeFormat('es-BO', {
+    weekday: 'short',
+    timeZone: 'UTC',
+  });
+
+  while (current.getTime() <= end.getTime()) {
+    const isoDate = formatUtcDateOnly(current);
+    const weekday = current.getUTCDay();
+
+    days.push({
+      isoDate,
+      dayOfMonth: String(current.getUTCDate()).padStart(2, '0'),
+      weekdayLabel: weekdayFormatter.format(current).replace('.', ''),
+      isWeekend: weekday === 0 || weekday === 6,
+      isToday: isoDate === todayIsoDate,
+    });
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return days;
+}
+
+function buildMonthSegments(days: readonly TimelineDay[]): MonthSegment[] {
+  const formatter = new Intl.DateTimeFormat('es-BO', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const segments: MonthSegment[] = [];
+
+  days.forEach((day, index) => {
+    const monthLabel = formatter.format(toUtcNoonDate(day.isoDate));
+    const previousSegment = segments.at(-1);
+
+    if (previousSegment !== undefined && previousSegment.label === monthLabel) {
+      previousSegment.span += 1;
+      return;
+    }
+
+    segments.push({
+      key: `${monthLabel}-${String(index)}`,
+      label: monthLabel,
+      startIndex: index,
+      span: 1,
+    });
+  });
+
+  return segments;
+}
+
 function daysBetweenInclusive(startDate: string, endDate: string): number {
-  const start = parseIsoDateOnly(startDate);
-  const end = parseIsoDateOnly(endDate);
-  const startTime = Date.UTC(start.year, start.monthIndex, start.day, 12, 0, 0);
-  const endTime = Date.UTC(end.year, end.monthIndex, end.day, 12, 0, 0);
+  const start = toUtcNoonDate(startDate);
+  const end = toUtcNoonDate(endDate);
   const dayInMilliseconds = 24 * 60 * 60 * 1000;
 
-  return Math.max(Math.floor((endTime - startTime) / dayInMilliseconds) + 1, 1);
+  return Math.max(Math.floor((end.getTime() - start.getTime()) / dayInMilliseconds) + 1, 1);
+}
+
+function toUtcNoonDate(value: string): Date {
+  const dateParts = parseIsoDateOnly(value);
+
+  return new Date(Date.UTC(dateParts.year, dateParts.monthIndex, dateParts.day, 12, 0, 0));
+}
+
+function formatUtcDateOnly(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+
+  return `${String(year)}-${month}-${day}`;
+}
+
+function getTodayIsoDate(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/La_Paz',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }

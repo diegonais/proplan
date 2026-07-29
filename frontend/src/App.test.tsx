@@ -1484,6 +1484,12 @@ describe('Reports module', () => {
     fireEvent.click(await screen.findByRole('option', { name: sampleProject.name }));
 
     expect(await screen.findByRole('heading', { name: 'Diagrama de Gantt' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Calendario del proyecto' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Detalle calendario de actividades' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Carga de trabajo por recurso' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Presupuesto vs costos reales' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Estado general' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Utilizacion de recursos' })).toBeInTheDocument();
     await waitFor(() => {
       expect(
         getCapturedRequests().some(
@@ -1552,7 +1558,8 @@ describe('Reports module', () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Indicadores y exportaciones' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Presupuesto vs costos reales' }));
+    expect(await screen.findByRole('heading', { name: 'Presupuesto vs costos reales' })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Exportar PDF' }));
 
     await waitFor(() => {
