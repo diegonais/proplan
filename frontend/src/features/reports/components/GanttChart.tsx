@@ -18,21 +18,20 @@ import {
 } from '@mui/material';
 import { ReactNode } from 'react';
 
-import { formatDateOnlyForDisplay, parseIsoDateOnly } from '../../../utils/dateTime';
+import { formatDateOnlyForDisplay } from '../../../utils/dateTime';
 import { getTaskDependencyTypeLabel, getTaskStatusLabel } from '../../tasks/types';
 import { GanttReport, GanttTaskReportItem } from '../types';
+import {
+  buildTimelineDays,
+  daysBetweenInclusive,
+  getVisibleTaskRange,
+  TimelineDay,
+  toUtcNoonDate,
+} from '../utils/ganttTimeline';
 
 interface GanttChartProps {
   report: GanttReport;
   compact?: boolean;
-}
-
-interface TimelineDay {
-  isoDate: string;
-  dayOfMonth: string;
-  weekdayLabel: string;
-  isWeekend: boolean;
-  isToday: boolean;
 }
 
 interface MonthSegment {
@@ -101,7 +100,6 @@ export function GanttChart({ report, compact = false }: GanttChartProps) {
                 task={task}
                 timelineDays={timelineDays}
                 rowIndex={index + 3}
-                projectStartDate={report.projectStartDate}
               />
             ))}
           </Box>
@@ -198,9 +196,10 @@ function HeaderDayCell({ day, columnIndex }: { day: TimelineDay; columnIndex: nu
         gridRow: '2',
         borderBottom: 1,
         borderRight: 1,
-        borderColor: 'divider',
-        bgcolor: day.isToday ? 'primary.light' : day.isWeekend ? 'action.hover' : 'background.paper',
-        color: day.isToday ? 'primary.contrastText' : 'text.primary',
+        borderColor: day.isToday ? 'primary.main' : 'divider',
+        boxShadow: day.isToday ? 'inset 0 -3px 0 0 currentColor' : 'none',
+        bgcolor: day.isWeekend ? 'action.hover' : 'background.paper',
+        color: day.isToday ? 'primary.main' : 'text.primary',
         minHeight: 56,
         px: 0.5,
         py: 0.75,
@@ -221,17 +220,12 @@ function GanttRow({
   task,
   timelineDays,
   rowIndex,
-  projectStartDate,
 }: {
   task: GanttTaskReportItem;
   timelineDays: readonly TimelineDay[];
   rowIndex: number;
-  projectStartDate: string;
 }) {
-  const offset = daysBetweenInclusive(projectStartDate, task.startDate) - 1;
-  const duration = daysBetweenInclusive(task.startDate, task.endDate);
-  const gridStart = Math.max(offset + 1, 1);
-  const gridSpan = Math.max(duration, 1);
+  const visibleRange = getVisibleTaskRange(task, timelineDays);
 
   return (
     <>
@@ -274,83 +268,58 @@ function GanttRow({
           position: 'relative',
         }}
       >
-        {timelineDays.map((day) => (
+        {timelineDays.map((day, index) => (
           <Box
             key={day.isoDate}
             sx={{
+              gridColumn: String(index + 1),
+              gridRow: '1',
               minHeight: 64,
               borderRight: 1,
-              borderColor: 'divider',
-              bgcolor: day.isToday
-                ? 'rgba(25, 118, 210, 0.10)'
-                : day.isWeekend
-                  ? 'action.hover'
-                  : 'transparent',
+              borderColor: day.isToday ? 'primary.main' : 'divider',
+              boxShadow: day.isToday ? 'inset 0 -3px 0 0 currentColor' : 'none',
+              color: day.isToday ? 'primary.main' : 'inherit',
+              bgcolor: day.isWeekend ? 'action.hover' : 'transparent',
             }}
           />
         ))}
-        <Tooltip
-          title={`${task.name}: ${formatDateOnlyForDisplay(task.startDate)} a ${formatDateOnlyForDisplay(
-            task.endDate,
-          )}. ${String(task.progress)}% completado.`}
-        >
-          <Box
-            sx={{
-              gridColumn: `${String(gridStart)} / span ${String(gridSpan)}`,
-              gridRow: '1',
-              borderRadius: 1,
-              border: 1,
-              borderColor: 'primary.main',
-              bgcolor: 'background.default',
-              overflow: 'hidden',
-              minHeight: 32,
-              display: 'flex',
-              alignItems: 'center',
-              px: 1,
-              mx: 0.5,
-              zIndex: 1,
-            }}
+        {visibleRange === null ? null : (
+          <Tooltip
+            title={`${task.name}: ${formatDateOnlyForDisplay(task.startDate)} a ${formatDateOnlyForDisplay(
+              task.endDate,
+            )}. ${String(task.progress)}% completado.`}
           >
-            <LinearProgress
-              variant="determinate"
-              value={task.progress}
-              sx={{ flex: 1, height: 8, borderRadius: 1 }}
-            />
-            <Typography variant="caption" sx={{ ml: 1, fontWeight: 700 }}>
-              {task.progress}%
-            </Typography>
-          </Box>
-        </Tooltip>
+            <Box
+              sx={{
+                gridColumn: `${String(visibleRange.gridStart)} / span ${String(visibleRange.gridSpan)}`,
+                gridRow: '1',
+                borderRadius: 1,
+                border: 1,
+                borderColor: 'primary.main',
+                bgcolor: 'background.default',
+                overflow: 'hidden',
+                minHeight: 32,
+                display: 'flex',
+                alignItems: 'center',
+                px: 1,
+                mx: 0.5,
+                zIndex: 1,
+              }}
+            >
+              <LinearProgress
+                variant="determinate"
+                value={task.progress}
+                sx={{ flex: 1, height: 8, borderRadius: 1 }}
+              />
+              <Typography variant="caption" sx={{ ml: 1, fontWeight: 700 }}>
+                {task.progress}%
+              </Typography>
+            </Box>
+          </Tooltip>
+        )}
       </Box>
     </>
   );
-}
-
-function buildTimelineDays(startDate: string, endDate: string): TimelineDay[] {
-  const days: TimelineDay[] = [];
-  const current = toUtcNoonDate(startDate);
-  const end = toUtcNoonDate(endDate);
-  const todayIsoDate = getTodayIsoDate();
-  const weekdayFormatter = new Intl.DateTimeFormat('es-BO', {
-    weekday: 'short',
-    timeZone: 'UTC',
-  });
-
-  while (current.getTime() <= end.getTime()) {
-    const isoDate = formatUtcDateOnly(current);
-    const weekday = current.getUTCDay();
-
-    days.push({
-      isoDate,
-      dayOfMonth: String(current.getUTCDate()).padStart(2, '0'),
-      weekdayLabel: weekdayFormatter.format(current).replace('.', ''),
-      isWeekend: weekday === 0 || weekday === 6,
-      isToday: isoDate === todayIsoDate,
-    });
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-
-  return days;
 }
 
 function buildMonthSegments(days: readonly TimelineDay[]): MonthSegment[] {
@@ -379,35 +348,4 @@ function buildMonthSegments(days: readonly TimelineDay[]): MonthSegment[] {
   });
 
   return segments;
-}
-
-function daysBetweenInclusive(startDate: string, endDate: string): number {
-  const start = toUtcNoonDate(startDate);
-  const end = toUtcNoonDate(endDate);
-  const dayInMilliseconds = 24 * 60 * 60 * 1000;
-
-  return Math.max(Math.floor((end.getTime() - start.getTime()) / dayInMilliseconds) + 1, 1);
-}
-
-function toUtcNoonDate(value: string): Date {
-  const dateParts = parseIsoDateOnly(value);
-
-  return new Date(Date.UTC(dateParts.year, dateParts.monthIndex, dateParts.day, 12, 0, 0));
-}
-
-function formatUtcDateOnly(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-
-  return `${String(year)}-${month}-${day}`;
-}
-
-function getTodayIsoDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/La_Paz',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
 }
