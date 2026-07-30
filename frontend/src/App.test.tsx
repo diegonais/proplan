@@ -1586,6 +1586,26 @@ describe('Reports module', () => {
     });
   });
 
+  it('shows the project status report as a traffic light', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectsListRoute([sampleProject]),
+      createStatusReportRoute(),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Estado general/ }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Proyecto' }));
+    fireEvent.click(await screen.findByRole('option', { name: sampleProject.name }));
+
+    expect(await screen.findByRole('heading', { name: 'Estado general del proyecto' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Semaforo del proyecto: Verde' })).toBeInTheDocument();
+    expect(screen.getByText('Estado estable')).toBeInTheDocument();
+    expect(screen.getByText('No existen actividades vencidas.')).toBeInTheDocument();
+  });
+
   it('blocks reports for regular users', async () => {
     window.history.pushState({}, '', `/reports?projectUuid=${sampleProject.uuid}`);
     installHttpMock([

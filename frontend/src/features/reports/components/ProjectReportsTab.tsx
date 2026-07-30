@@ -314,7 +314,7 @@ export function ProjectReportsTab({
 
   return (
     <Stack spacing={3}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
+      <Stack spacing={0.5}>
         <Box>
           <Typography component="h2" variant="h5">
             Estado general del proyecto
@@ -323,32 +323,57 @@ export function ProjectReportsTab({
             Informe tipo semaforo con avance, vencimientos y razones del estado.
           </Typography>
         </Box>
-        <TrafficLightChip color={statusReport.trafficLight.color} />
       </Stack>
 
-      <MetricGrid metrics={statusMetrics} />
+      <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', p: { xs: 2, md: 3 } }}>
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'grid',
+            gap: 3,
+            gridTemplateColumns: { xs: '1fr', md: '160px minmax(0, 1fr)' },
+          }}
+        >
+          <TrafficLightChip color={statusReport.trafficLight.color} />
 
-      <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', p: 2 }}>
-        <Stack spacing={1.5}>
-          <Stack spacing={1}>
-            {statusReport.trafficLight.reasons.map((reason) => (
-              <Alert key={reason} severity={resolveAlertSeverity(statusReport.trafficLight.color)}>
-                {reason}
-              </Alert>
-            ))}
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="overline" color="text.secondary">
+                Diagnostico del proyecto
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Estado {statusReport.trafficLight.color === 'GREEN' ? 'estable' : 'con atencion requerida'}
+              </Typography>
+            </Box>
+
+            <Stack spacing={1}>
+              {statusReport.trafficLight.reasons.map((reason) => (
+                <Alert key={reason} severity={resolveAlertSeverity(statusReport.trafficLight.color)}>
+                  {reason}
+                </Alert>
+              ))}
+            </Stack>
+
+            <Stack spacing={0.75}>
+              <Stack direction="row" justifyContent="space-between" spacing={2}>
+                <Typography variant="body2" color="text.secondary">
+                  Avance del proyecto
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {formatPercentage(statusReport.progressPercentage)}
+                </Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={Number(statusReport.progressPercentage)}
+                sx={{ height: 10, borderRadius: 1 }}
+              />
+            </Stack>
           </Stack>
-          <Stack spacing={0.75}>
-            <Typography variant="body2" color="text.secondary">
-              Avance del proyecto
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={Number(statusReport.progressPercentage)}
-              sx={{ height: 10, borderRadius: 1 }}
-            />
-          </Stack>
-        </Stack>
+        </Box>
       </Paper>
+
+      <MetricGrid metrics={statusMetrics} />
 
       <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
         <Table aria-label="Actividades por estado">
