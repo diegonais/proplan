@@ -1,5 +1,6 @@
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {
   Alert,
   Box,
@@ -53,6 +54,7 @@ export function ProjectReportsTab({
   const [workload, setWorkload] = useState<WorkloadItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'excel' | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showNotification } = useNotifications();
 
@@ -94,14 +96,28 @@ export function ProjectReportsTab({
     try {
       const file =
         format === 'pdf'
-          ? await downloadProjectPdfExport(project.uuid)
-          : await downloadProjectExcelExport(project.uuid);
+          ? await downloadProjectPdfExport(project.uuid, reportType)
+          : await downloadProjectExcelExport(project.uuid, reportType);
       triggerBrowserDownload(file);
       showNotification('Exportacion generada correctamente.', 'success');
     } catch (requestError: unknown) {
       showNotification(getApiErrorMessage(requestError).message, 'error');
     } finally {
       setDownloadingFormat(null);
+    }
+  };
+
+  const handlePreview = async () => {
+    setIsPreviewing(true);
+    try {
+      const file = await downloadProjectPdfExport(project.uuid, reportType);
+      if (!openPdfPreview(file)) {
+        showNotification('Permita ventanas emergentes para previsualizar el PDF.', 'warning');
+      }
+    } catch (requestError: unknown) {
+      showNotification(getApiErrorMessage(requestError).message, 'error');
+    } finally {
+      setIsPreviewing(false);
     }
   };
 
@@ -221,6 +237,10 @@ export function ProjectReportsTab({
           </Box>
           <ExportButtons
             downloadingFormat={downloadingFormat}
+            isPreviewing={isPreviewing}
+            onPreview={() => {
+              void handlePreview();
+            }}
             onDownload={(format) => {
               void handleDownload(format);
             }}
@@ -314,7 +334,7 @@ export function ProjectReportsTab({
 
   return (
     <Stack spacing={3}>
-      <Stack spacing={0.5}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
         <Box>
           <Typography component="h2" variant="h5">
             Estado general del proyecto
@@ -323,6 +343,16 @@ export function ProjectReportsTab({
             Informe tipo semaforo con avance, vencimientos y razones del estado.
           </Typography>
         </Box>
+        <ExportButtons
+          downloadingFormat={downloadingFormat}
+          isPreviewing={isPreviewing}
+          onPreview={() => {
+            void handlePreview();
+          }}
+          onDownload={(format) => {
+            void handleDownload(format);
+          }}
+        />
       </Stack>
 
       <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', p: { xs: 2, md: 3 } }}>
@@ -453,13 +483,33 @@ function MetricGrid({ metrics }: { metrics: readonly { label: string; value: str
 
 function ExportButtons({
   downloadingFormat,
+  isPreviewing,
+  onPreview,
   onDownload,
 }: {
   downloadingFormat: 'pdf' | 'excel' | null;
+  isPreviewing: boolean;
+  onPreview: () => void;
   onDownload: (format: 'pdf' | 'excel') => void;
 }) {
+  const isBusy = downloadingFormat !== null || isPreviewing;
+
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+      <Button
+        variant="outlined"
+        startIcon={
+          isPreviewing ? (
+            <CircularProgress size={18} aria-label="Generando previsualizacion" />
+          ) : (
+            <VisibilityOutlinedIcon />
+          )
+        }
+        disabled={isBusy}
+        onClick={onPreview}
+      >
+        Previsualizar
+      </Button>
       <Button
         variant="outlined"
         startIcon={
@@ -469,7 +519,7 @@ function ExportButtons({
             <PictureAsPdfOutlinedIcon />
           )
         }
-        disabled={downloadingFormat !== null}
+        disabled={isBusy}
         onClick={() => {
           onDownload('pdf');
         }}
@@ -485,7 +535,7 @@ function ExportButtons({
             <TableChartOutlinedIcon />
           )
         }
-        disabled={downloadingFormat !== null}
+        disabled={isBusy}
         onClick={() => {
           onDownload('excel');
         }}
@@ -494,6 +544,22 @@ function ExportButtons({
       </Button>
     </Stack>
   );
+}
+
+function openPdfPreview(file: ProjectExportDownload): boolean {
+  const objectUrl = URL.createObjectURL(file.blob);
+  const previewWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+
+  if (previewWindow === null) {
+    URL.revokeObjectURL(objectUrl);
+    return false;
+  }
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 60000);
+
+  return true;
 }
 
 function triggerBrowserDownload(file: ProjectExportDownload): void {

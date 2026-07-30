@@ -1,5 +1,8 @@
+import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {
   Alert,
   Box,
@@ -20,6 +23,7 @@ import {
 } from '@mui/material';
 import { useCallback, useMemo, useState } from 'react';
 
+import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import { Project } from '../../projects/types';
 import { ResourceOperationalStatusChip } from '../../resources/components/ResourceOperationalStatusChip';
@@ -28,7 +32,13 @@ import {
   getResourceAssignmentTemporalStatusLabel,
   getResourceCategoryLabel,
 } from '../../resources/types';
-import { getResourcesReport } from '../services/reportsApi';
+import {
+  downloadResourcesExcelExport,
+  downloadResourcesPdfExport,
+  getResourcesReport,
+  ProjectExportDownload,
+  ResourcesReportParams,
+} from '../services/reportsApi';
 import {
   ResourceCurrentAvailabilityStatus,
   ResourcesReport,
@@ -69,8 +79,11 @@ export function ResourceUtilizationReportTab({
     resourceType: 'ALL',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'excel' | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showNotification } = useNotifications();
 
   const canGenerate = isValidFilterSelection(filters);
 
@@ -111,6 +124,45 @@ export function ResourceUtilizationReportTab({
       setIsLoading(false);
     }
   }, [filters]);
+
+  const handleDownload = async (format: 'pdf' | 'excel') => {
+    if (!isValidFilterSelection(filters)) {
+      return;
+    }
+
+    setDownloadingFormat(format);
+    try {
+      const params = buildResourcesReportParams(filters);
+      const file =
+        format === 'pdf'
+          ? await downloadResourcesPdfExport(params)
+          : await downloadResourcesExcelExport(params);
+      triggerBrowserDownload(file);
+      showNotification('Exportacion generada correctamente.', 'success');
+    } catch (requestError: unknown) {
+      showNotification(getApiErrorMessage(requestError).message, 'error');
+    } finally {
+      setDownloadingFormat(null);
+    }
+  };
+
+  const handlePreview = async () => {
+    if (!isValidFilterSelection(filters)) {
+      return;
+    }
+
+    setIsPreviewing(true);
+    try {
+      const file = await downloadResourcesPdfExport(buildResourcesReportParams(filters));
+      if (!openPdfPreview(file)) {
+        showNotification('Permita ventanas emergentes para previsualizar el PDF.', 'warning');
+      }
+    } catch (requestError: unknown) {
+      showNotification(getApiErrorMessage(requestError).message, 'error');
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
 
   const metrics = useMemo(() => {
     if (report === null) {
@@ -302,6 +354,56 @@ export function ResourceUtilizationReportTab({
 
       {!isLoading && report !== null ? (
         <Stack spacing={3}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              startIcon={
+                isPreviewing ? (
+                  <CircularProgress size={18} aria-label="Generando previsualizacion" />
+                ) : (
+                  <VisibilityOutlinedIcon />
+                )
+              }
+              disabled={downloadingFormat !== null || isPreviewing}
+              onClick={() => {
+                void handlePreview();
+              }}
+            >
+              Previsualizar
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
+                downloadingFormat === 'pdf' ? (
+                  <CircularProgress size={18} aria-label="Descargando PDF" />
+                ) : (
+                  <PictureAsPdfOutlinedIcon />
+                )
+              }
+              disabled={downloadingFormat !== null || isPreviewing}
+              onClick={() => {
+                void handleDownload('pdf');
+              }}
+            >
+              Exportar PDF
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
+                downloadingFormat === 'excel' ? (
+                  <CircularProgress size={18} aria-label="Descargando Excel" />
+                ) : (
+                  <TableChartOutlinedIcon />
+                )
+              }
+              disabled={downloadingFormat !== null || isPreviewing}
+              onClick={() => {
+                void handleDownload('excel');
+              }}
+            >
+              Exportar Excel
+            </Button>
+          </Stack>
           <MetricGrid metrics={metrics} />
           <Typography variant="body2" color="text.secondary">
             {report.datePolicy}
@@ -311,6 +413,45 @@ export function ResourceUtilizationReportTab({
       ) : null}
     </Stack>
   );
+}
+
+function buildResourcesReportParams(filters: Filters): ResourcesReportParams {
+  return {
+    projectUuid: filters.projectUuid,
+    resourceType: filters.resourceType,
+    month: filters.periodMode === 'month' ? filters.month : undefined,
+    startDate: filters.periodMode === 'range' ? filters.startDate : undefined,
+    endDate: filters.periodMode === 'range' ? filters.endDate : undefined,
+  };
+}
+
+function triggerBrowserDownload(file: ProjectExportDownload): void {
+  const objectUrl = URL.createObjectURL(file.blob);
+  const link = document.createElement('a');
+
+  link.href = objectUrl;
+  link.download = file.fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function openPdfPreview(file: ProjectExportDownload): boolean {
+  const objectUrl = URL.createObjectURL(file.blob);
+  const previewWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+
+  if (previewWindow === null) {
+    URL.revokeObjectURL(objectUrl);
+    return false;
+  }
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 60000);
+
+  return true;
 }
 
 function ResourcesReportTable({ items }: { items: readonly ResourcesReportItem[] }) {

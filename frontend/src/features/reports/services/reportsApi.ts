@@ -18,6 +18,8 @@ export interface ProjectExportDownload {
   fileName: string;
 }
 
+export type ProjectExportReportType = 'full' | 'gantt' | 'budget' | 'status' | 'resources' | 'workload';
+
 export interface ResourcesReportParams {
   projectUuid?: string;
   resourceType?: ResourcesReportTypeFilter;
@@ -62,6 +64,18 @@ export async function getResourcesReport(params: ResourcesReportParams): Promise
   return response.data;
 }
 
+export async function downloadResourcesPdfExport(
+  params: ResourcesReportParams,
+): Promise<ProjectExportDownload> {
+  return downloadResourcesExport(params, 'pdf', 'reporte-recursos.pdf');
+}
+
+export async function downloadResourcesExcelExport(
+  params: ResourcesReportParams,
+): Promise<ProjectExportDownload> {
+  return downloadResourcesExport(params, 'excel', 'reporte-recursos.xlsx');
+}
+
 export async function getProjectBudgetReport(projectUuid: string): Promise<ProjectBudgetReport> {
   const response = await httpClient.get<ProjectBudgetReport>(`/projects/${projectUuid}/reports/budget`);
 
@@ -82,12 +96,18 @@ export async function getProjectStatusReport(projectUuid: string): Promise<Proje
   return response.data;
 }
 
-export async function downloadProjectPdfExport(projectUuid: string): Promise<ProjectExportDownload> {
-  return downloadProjectExport(projectUuid, 'pdf', 'reporte-proyecto.pdf');
+export async function downloadProjectPdfExport(
+  projectUuid: string,
+  reportType: ProjectExportReportType = 'full',
+): Promise<ProjectExportDownload> {
+  return downloadProjectExport(projectUuid, 'pdf', reportType, 'reporte-proyecto.pdf');
 }
 
-export async function downloadProjectExcelExport(projectUuid: string): Promise<ProjectExportDownload> {
-  return downloadProjectExport(projectUuid, 'excel', 'reporte-proyecto.xlsx');
+export async function downloadProjectExcelExport(
+  projectUuid: string,
+  reportType: ProjectExportReportType = 'full',
+): Promise<ProjectExportDownload> {
+  return downloadProjectExport(projectUuid, 'excel', reportType, 'reporte-proyecto.xlsx');
 }
 
 export function parseContentDispositionFileName(headerValue: string | undefined): string | null {
@@ -115,10 +135,33 @@ export function parseContentDispositionFileName(headerValue: string | undefined)
 async function downloadProjectExport(
   projectUuid: string,
   format: 'pdf' | 'excel',
+  reportType: ProjectExportReportType,
   fallbackFileName: string,
 ): Promise<ProjectExportDownload> {
   const response = await httpClient
     .get<Blob>(`/projects/${projectUuid}/exports/${format}`, {
+      params: { reportType },
+      responseType: 'blob',
+    })
+    .catch(async (error: unknown) => {
+      throw await normalizeBlobDownloadError(error);
+    });
+  const headerValue = readHeader(response.headers, 'content-disposition');
+
+  return {
+    blob: response.data,
+    fileName: parseContentDispositionFileName(headerValue) ?? fallbackFileName,
+  };
+}
+
+async function downloadResourcesExport(
+  params: ResourcesReportParams,
+  format: 'pdf' | 'excel',
+  fallbackFileName: string,
+): Promise<ProjectExportDownload> {
+  const response = await httpClient
+    .get<Blob>(`/reports/resources/exports/${format}`, {
+      params: removeEmptyParams(params),
       responseType: 'blob',
     })
     .catch(async (error: unknown) => {

@@ -17,7 +17,13 @@ import { TaskAssignment } from '../task-assignments/entities/task-assignment.ent
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { Task } from '../tasks/entities/task.entity';
 import { User } from '../users/entities/user.entity';
-import { ExportsService, formatDateTimeInLaPaz, sanitizeExcelText } from './exports.service';
+import {
+  ExportsService,
+  ProjectExportReportType,
+  formatDateTimeInLaPaz,
+  sanitizeExcelText,
+} from './exports.service';
+import { ReportsService } from './reports.service';
 
 const adminUser = createAuthenticatedUser('11111111-1111-4111-8111-111111111111', UserRole.ADMIN);
 const managerUser = createAuthenticatedUser(
@@ -94,6 +100,7 @@ describe('ExportsService', () => {
       assignmentsRepository as unknown as Repository<TaskAssignment>,
       membersRepository as unknown as Repository<ProjectMember>,
       resourceAssignmentsRepository as unknown as Repository<ResourceAssignment>,
+      {} as ReportsService,
     );
   });
 
@@ -102,7 +109,7 @@ describe('ExportsService', () => {
     const pdfText = extractPdfHexText(file.buffer.toString('latin1'));
 
     expect(file.contentType).toBe('application/pdf');
-    expect(file.fileName).toMatch(/^proplan-proyecto-exportable-/);
+    expect(file.fileName).toMatch(/^proplan-completo-proyecto-exportable-/);
     expect(file.fileName).toMatch(/\.pdf$/);
     expect(file.buffer.length).toBeGreaterThan(1000);
     expect(pdfText).toContain('Recursos asignados');
@@ -115,14 +122,73 @@ describe('ExportsService', () => {
 
     expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual([
       'Proyecto',
+      'Estado general',
       'Actividades',
-      'Asignaciones',
-      'Equipo',
-      'Presupuesto y costos',
+      'Gantt',
       'Dependencias',
+      'Equipo',
+      'Asignaciones',
+      'Presupuesto y costos',
       'Recursos',
       'Asignaciones de recursos',
     ]);
+  });
+
+  it('exports only the requested report section when report type is selected', async () => {
+    const workbook = await loadGeneratedWorkbook(
+      service,
+      project.uuid,
+      adminUser,
+      ProjectExportReportType.BUDGET,
+    );
+
+    expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual([
+      'Proyecto',
+      'Presupuesto y costos',
+    ]);
+  });
+
+  it('includes the project summary only in status PDF exports', async () => {
+    const budgetFile = await service.generateProjectPdf(
+      project.uuid,
+      adminUser,
+      ProjectExportReportType.BUDGET,
+    );
+    const statusFile = await service.generateProjectPdf(
+      project.uuid,
+      adminUser,
+      ProjectExportReportType.STATUS,
+    );
+
+    expect(extractPdfHexText(budgetFile.buffer.toString('latin1'))).not.toContain(
+      'Datos del proyecto',
+    );
+    expect(extractPdfHexText(statusFile.buffer.toString('latin1'))).toContain(
+      'Datos del proyecto',
+    );
+  });
+
+  it('generates a Gantt Excel sheet with hierarchy, dependencies and timeline marks', async () => {
+    const workbook = await loadGeneratedWorkbook(service, project.uuid, adminUser);
+    const worksheet = workbook.getWorksheet('Gantt');
+
+    expect(getHeaderValues(workbook, 'Gantt').slice(0, 10)).toEqual([
+      'Nivel',
+      'Actividad',
+      'Fecha inicio',
+      'Fecha fin',
+      'Duracion dias',
+      'Progreso',
+      'Estado',
+      'Responsables',
+      'Predecesoras',
+      'Sucesoras',
+    ]);
+    expect(worksheet?.getCell('A2').value).toBe(0);
+    expect(worksheet?.getCell('A3').value).toBe(1);
+    expect(worksheet?.getCell('I3').value).toBe("'=Actividad con formula");
+    expect(worksheet?.getCell('J2').value).toBe('Subactividad');
+    expect(worksheet?.getCell('K2').value).toBe('X');
   });
 
   it('generates resource Excel sheets with requested headers', async () => {
@@ -228,8 +294,9 @@ async function loadGeneratedWorkbook(
   service: ExportsService,
   projectUuid: string,
   currentUser: AuthenticatedUser,
+  reportType = ProjectExportReportType.FULL,
 ): Promise<ExcelJS.Workbook> {
-  const file = await service.generateProjectExcel(projectUuid, currentUser);
+  const file = await service.generateProjectExcel(projectUuid, currentUser, reportType);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(file.buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 

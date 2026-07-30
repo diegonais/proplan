@@ -1,10 +1,20 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -27,7 +37,11 @@ import {
   TrafficLightReportResponseDto,
   WorkloadReportItemResponseDto,
 } from './dto/report-common.dto';
-import { ExportsService, GeneratedExportFile } from './exports.service';
+import {
+  ExportsService,
+  GeneratedExportFile,
+  ProjectExportReportType,
+} from './exports.service';
 import { ReportsService } from './reports.service';
 
 @ApiTags('reports')
@@ -58,6 +72,32 @@ export class ReportsController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ): Promise<ResourcesReportResponseDto> {
     return this.reportsService.getResourcesReport(query, currentUser);
+  }
+
+  @Get('reports/resources/exports/pdf')
+  @ApiOperation({ summary: 'Exportar carga y utilizacion de recursos en PDF.' })
+  @ApiOkResponse({ description: 'Archivo PDF generado en memoria.' })
+  async exportResourcesPdf(
+    @Query() query: ResourcesReportQueryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.exportsService.generateResourcesReportPdf(query, currentUser);
+
+    sendGeneratedFile(response, file);
+  }
+
+  @Get('reports/resources/exports/excel')
+  @ApiOperation({ summary: 'Exportar carga y utilizacion de recursos en Excel.' })
+  @ApiOkResponse({ description: 'Archivo XLSX generado en memoria.' })
+  async exportResourcesExcel(
+    @Query() query: ResourcesReportQueryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.exportsService.generateResourcesReportExcel(query, currentUser);
+
+    sendGeneratedFile(response, file);
   }
 
   @Get('projects/:projectUuid/reports/gantt')
@@ -130,14 +170,25 @@ export class ReportsController {
   @Get('projects/:projectUuid/exports/pdf')
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
   @ApiOperation({ summary: 'Exportar reporte completo del proyecto en PDF.' })
+  @ApiQuery({
+    name: 'reportType',
+    enum: ProjectExportReportType,
+    required: false,
+    description: 'Tipo de reporte a exportar. Si se omite, exporta el reporte completo.',
+  })
   @ApiOkResponse({ description: 'Archivo PDF generado en memoria.' })
   @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
   async exportProjectPdf(
     @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @Query('reportType') reportType: string | undefined,
     @CurrentUser() currentUser: AuthenticatedUser,
     @Res() response: Response,
   ): Promise<void> {
-    const file = await this.exportsService.generateProjectPdf(projectUuid, currentUser);
+    const file = await this.exportsService.generateProjectPdf(
+      projectUuid,
+      currentUser,
+      parseProjectExportReportType(reportType),
+    );
 
     sendGeneratedFile(response, file);
   }
@@ -145,14 +196,25 @@ export class ReportsController {
   @Get('projects/:projectUuid/exports/excel')
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
   @ApiOperation({ summary: 'Exportar reporte completo del proyecto en Excel.' })
+  @ApiQuery({
+    name: 'reportType',
+    enum: ProjectExportReportType,
+    required: false,
+    description: 'Tipo de reporte a exportar. Si se omite, exporta el reporte completo.',
+  })
   @ApiOkResponse({ description: 'Archivo XLSX generado en memoria.' })
   @ApiNotFoundResponse({ description: 'Proyecto no encontrado o eliminado.' })
   async exportProjectExcel(
     @Param('projectUuid', ParseUUIDPipe) projectUuid: string,
+    @Query('reportType') reportType: string | undefined,
     @CurrentUser() currentUser: AuthenticatedUser,
     @Res() response: Response,
   ): Promise<void> {
-    const file = await this.exportsService.generateProjectExcel(projectUuid, currentUser);
+    const file = await this.exportsService.generateProjectExcel(
+      projectUuid,
+      currentUser,
+      parseProjectExportReportType(reportType),
+    );
 
     sendGeneratedFile(response, file);
   }
@@ -163,4 +225,16 @@ function sendGeneratedFile(response: Response, file: GeneratedExportFile): void 
   response.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
   response.setHeader('Content-Length', file.buffer.length.toString());
   response.send(file.buffer);
+}
+
+function parseProjectExportReportType(value: string | undefined): ProjectExportReportType {
+  if (value === undefined || value.length === 0) {
+    return ProjectExportReportType.FULL;
+  }
+
+  if (Object.values(ProjectExportReportType).includes(value as ProjectExportReportType)) {
+    return value as ProjectExportReportType;
+  }
+
+  throw new BadRequestException('reportType debe ser un tipo de reporte valido.');
 }
