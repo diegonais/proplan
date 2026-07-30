@@ -1,4 +1,5 @@
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
+import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import {
   Alert,
   Box,
@@ -17,80 +18,100 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import { Project } from '../../projects/types';
 import { ResourceOperationalStatusChip } from '../../resources/components/ResourceOperationalStatusChip';
 import {
   ResourceAssignmentTemporalStatus,
-  ResourceCategory,
   getResourceAssignmentTemporalStatusLabel,
   getResourceCategoryLabel,
-  resourceCategories,
 } from '../../resources/types';
-import { getProjectResourceUtilizationReport } from '../services/reportsApi';
+import { getResourcesReport } from '../services/reportsApi';
 import {
   ResourceCurrentAvailabilityStatus,
-  ResourceUtilizationAssignment,
-  ResourceUtilizationReport,
+  ResourcesReport,
+  ResourcesReportItem,
+  ResourcesReportTypeFilter,
   getResourceCurrentAvailabilityStatusLabel,
+  getResourcesReportItemTypeLabel,
+  getResourcesReportTypeFilterLabel,
 } from '../types';
 
 interface ResourceUtilizationReportTabProps {
-  project: Project;
+  projectOptions: readonly Project[];
+  initialProjectUuid?: string;
 }
 
 interface Filters {
-  category: ResourceCategory | '';
-  taskUuid: string;
-  temporalStatus: ResourceAssignmentTemporalStatus | '';
+  periodMode: 'month' | 'range';
+  month: string;
+  startDate: string;
+  endDate: string;
+  projectUuid: string;
+  resourceType: ResourcesReportTypeFilter;
 }
 
-const temporalStatuses: readonly ResourceAssignmentTemporalStatus[] = [
-  'ACTIVA',
-  'PROGRAMADA',
-  'FINALIZADA',
-];
+const resourceTypeOptions: readonly ResourcesReportTypeFilter[] = ['ALL', 'HUMAN', 'MATERIAL'];
 
-export function ResourceUtilizationReportTab({ project }: ResourceUtilizationReportTabProps) {
-  const [report, setReport] = useState<ResourceUtilizationReport | null>(null);
+export function ResourceUtilizationReportTab({
+  projectOptions,
+  initialProjectUuid = '',
+}: ResourceUtilizationReportTabProps) {
+  const [report, setReport] = useState<ResourcesReport | null>(null);
   const [filters, setFilters] = useState<Filters>({
-    category: '',
-    taskUuid: '',
-    temporalStatus: '',
+    periodMode: 'month',
+    month: '',
+    startDate: '',
+    endDate: '',
+    projectUuid: initialProjectUuid,
+    resourceType: 'ALL',
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const canGenerate = isValidFilterSelection(filters);
+
+  const updateFilters = (nextFilters: Partial<Filters>) => {
+    setFilters((currentFilters) => ({
+      ...currentFilters,
+      ...nextFilters,
+    }));
+    setReport(null);
+    setHasGeneratedReport(false);
+    setError(null);
+  };
+
   const loadReport = useCallback(async () => {
+    if (!isValidFilterSelection(filters)) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      setReport(await getProjectResourceUtilizationReport(project.uuid));
+      setReport(
+        await getResourcesReport({
+          projectUuid: filters.projectUuid,
+          resourceType: filters.resourceType,
+          month: filters.periodMode === 'month' ? filters.month : undefined,
+          startDate: filters.periodMode === 'range' ? filters.startDate : undefined,
+          endDate: filters.periodMode === 'range' ? filters.endDate : undefined,
+        }),
+      );
+      setHasGeneratedReport(true);
     } catch (requestError: unknown) {
       setReport(null);
+      setHasGeneratedReport(true);
       setError(getApiErrorMessage(requestError).message);
     } finally {
       setIsLoading(false);
     }
-  }, [project.uuid]);
+  }, [filters]);
 
-  useEffect(() => {
-    setFilters({
-      category: '',
-      taskUuid: '',
-      temporalStatus: '',
-    });
-    void loadReport();
-  }, [loadReport]);
-
-  const taskOptions = useMemo(() => buildTaskOptions(report?.assignments ?? []), [report]);
-  const filteredAssignments = useMemo(
-    () => filterAssignments(report?.assignments ?? [], filters),
-    [filters, report],
-  );
   const metrics = useMemo(() => {
     if (report === null) {
       return [];
@@ -98,261 +119,321 @@ export function ResourceUtilizationReportTab({ project }: ResourceUtilizationRep
 
     return [
       {
-        label: 'Recursos asignados',
-        value: report.summary.totalAssignedResources.toString(),
+        label: 'Recursos humanos',
+        value: report.summary.totalHumanResources.toString(),
       },
       {
-        label: 'Asignaciones activas',
-        value: report.summary.activeAssignments.toString(),
+        label: 'Recursos materiales',
+        value: report.summary.totalMaterialResources.toString(),
       },
       {
-        label: 'Programadas',
-        value: report.summary.scheduledAssignments.toString(),
+        label: 'Horas humanas',
+        value: formatHours(report.summary.totalAssignedHours),
       },
       {
-        label: 'Finalizadas',
-        value: report.summary.finishedAssignments.toString(),
+        label: 'Dias materiales',
+        value: report.summary.totalMaterialAssignmentDays.toString(),
       },
     ];
   }, [report]);
 
-  if (isLoading) {
-    return (
-      <Stack alignItems="center" spacing={2} sx={{ py: 6 }}>
-        <CircularProgress aria-label="Cargando utilizacion de recursos" />
-        <Typography color="text.secondary">Cargando utilizacion de recursos</Typography>
-      </Stack>
-    );
-  }
-
-  if (error !== null || report === null) {
-    return <Alert severity="error">{error ?? 'No se pudo cargar la utilizacion de recursos.'}</Alert>;
-  }
-
   return (
     <Stack spacing={3}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
-        <Box>
-          <Typography component="h2" variant="h5">
-            Utilizacion de recursos
-          </Typography>
-          <Typography color="text.secondary">
-            Equipos, licencias y servicios asignados por periodo, separados de la carga humana.
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshOutlinedIcon />}
-          onClick={() => {
-            void loadReport();
-          }}
-        >
-          Actualizar
-        </Button>
+      <Stack spacing={0.5}>
+        <Typography component="h2" variant="h5">
+          Carga y utilizacion de recursos
+        </Typography>
+        <Typography color="text.secondary">
+          Reporte general con filtros por periodo, proyecto y alcance de recursos.
+        </Typography>
       </Stack>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, 1fr)' },
-        }}
-      >
-        {metrics.map((metric) => (
-          <Paper key={metric.label} elevation={0} sx={{ border: 1, borderColor: 'divider', p: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              {metric.label}
-            </Typography>
-            <Typography variant="h6">{metric.value}</Typography>
-          </Paper>
-        ))}
-      </Box>
-
-      <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-        <Table aria-label="Recursos por categoria">
-          <TableHead>
-            <TableRow>
-              <TableCell>Categoria</TableCell>
-              <TableCell align="right">Recursos</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {report.summary.resourcesByCategory.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={2}>
-                  <Box sx={{ py: 3, textAlign: 'center' }}>
-                    <Typography color="text.secondary">No hay recursos asignados.</Typography>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ) : (
-              report.summary.resourcesByCategory.map((item) => (
-                <TableRow key={item.category} hover>
-                  <TableCell>{getResourceCategoryLabel(item.category)}</TableCell>
-                  <TableCell align="right">{item.count}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
       <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', p: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-          <TextField
-            label="Categoria"
-            select
-            fullWidth
-            value={filters.category}
-            onChange={(event) => {
-              setFilters((currentFilters) => ({
-                ...currentFilters,
-                category: event.target.value as ResourceCategory | '',
-              }));
-            }}
-          >
-            <MenuItem value="">Todas</MenuItem>
-            {resourceCategories.map((category) => (
-              <MenuItem key={category} value={category}>
-                {getResourceCategoryLabel(category)}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="Actividad"
-            select
-            fullWidth
-            value={filters.taskUuid}
-            onChange={(event) => {
-              setFilters((currentFilters) => ({
-                ...currentFilters,
-                taskUuid: event.target.value,
-              }));
-            }}
-          >
-            <MenuItem value="">Todas</MenuItem>
-            <MenuItem value="__project__">Proyecto completo</MenuItem>
-            {taskOptions.map((task) => (
-              <MenuItem key={task.uuid} value={task.uuid}>
-                {task.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="Estado temporal"
-            select
-            fullWidth
-            value={filters.temporalStatus}
-            onChange={(event) => {
-              setFilters((currentFilters) => ({
-                ...currentFilters,
-                temporalStatus: event.target.value as ResourceAssignmentTemporalStatus | '',
-              }));
-            }}
-          >
-            <MenuItem value="">Todos</MenuItem>
-            {temporalStatuses.map((status) => (
-              <MenuItem key={status} value={status}>
-                {getResourceAssignmentTemporalStatusLabel(status)}
-              </MenuItem>
-            ))}
-          </TextField>
+        <Stack spacing={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <TextField
+              label="Periodo"
+              select
+              fullWidth
+              value={filters.periodMode}
+              onChange={(event) => {
+                updateFilters({
+                  periodMode: event.target.value as Filters['periodMode'],
+                  month: '',
+                  startDate: '',
+                  endDate: '',
+                });
+              }}
+            >
+              <MenuItem value="month">Mes</MenuItem>
+              <MenuItem value="range">Rango de fechas</MenuItem>
+            </TextField>
+            {filters.periodMode === 'month' ? (
+              <TextField
+                label="Mes"
+                type="month"
+                fullWidth
+                value={filters.month}
+                onChange={(event) => {
+                  updateFilters({ month: event.target.value });
+                }}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            ) : (
+              <>
+                <TextField
+                  label="Fecha inicial"
+                  type="date"
+                  fullWidth
+                  value={filters.startDate}
+                  onChange={(event) => {
+                    updateFilters({ startDate: event.target.value });
+                  }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+                <TextField
+                  label="Fecha final"
+                  type="date"
+                  fullWidth
+                  value={filters.endDate}
+                  onChange={(event) => {
+                    updateFilters({ endDate: event.target.value });
+                  }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+              </>
+            )}
+          </Stack>
+
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <TextField
+              label="Proyecto"
+              select
+              fullWidth
+              value={filters.projectUuid}
+              onChange={(event) => {
+                updateFilters({ projectUuid: event.target.value });
+              }}
+              helperText="Opcional para consultar todos los proyectos disponibles."
+            >
+              <MenuItem value="">Todos los proyectos</MenuItem>
+              {projectOptions.map((project) => (
+                <MenuItem key={project.uuid} value={project.uuid}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Alcance de recursos"
+              select
+              fullWidth
+              value={filters.resourceType}
+              onChange={(event) => {
+                updateFilters({ resourceType: event.target.value as ResourcesReportTypeFilter });
+              }}
+            >
+              {resourceTypeOptions.map((type) => (
+                <MenuItem key={type} value={type}>
+                  {getResourcesReportTypeFilterLabel(type)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+
+          {filters.periodMode === 'range' &&
+          filters.startDate.length > 0 &&
+          filters.endDate.length > 0 &&
+          filters.startDate > filters.endDate ? (
+            <Alert severity="warning">La fecha final debe ser mayor o igual a la fecha inicial.</Alert>
+          ) : null}
+
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <Button
+              variant="contained"
+              startIcon={
+                isLoading ? (
+                  <CircularProgress size={18} aria-label="Generando reporte de recursos" />
+                ) : (
+                  <SearchOutlinedIcon />
+                )
+              }
+              disabled={!canGenerate || isLoading}
+              onClick={() => {
+                void loadReport();
+              }}
+            >
+              Generar reporte
+            </Button>
+            {hasGeneratedReport ? (
+              <Button
+                variant="outlined"
+                startIcon={<RefreshOutlinedIcon />}
+                disabled={!canGenerate || isLoading}
+                onClick={() => {
+                  void loadReport();
+                }}
+              >
+                Actualizar
+              </Button>
+            ) : null}
+          </Stack>
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-        <Table aria-label="Asignaciones de recursos por periodo">
-          <TableHead>
-            <TableRow>
-              <TableCell>Codigo</TableCell>
-              <TableCell>Recurso</TableCell>
-              <TableCell>Categoria</TableCell>
-              <TableCell>Estado operativo</TableCell>
-              <TableCell>Actividad asociada</TableCell>
-              <TableCell>Fecha inicial</TableCell>
-              <TableCell>Fecha final</TableCell>
-              <TableCell>Estado temporal</TableCell>
-              <TableCell align="right">Dias</TableCell>
-              <TableCell>Disponibilidad actual</TableCell>
-              <TableCell>Observaciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredAssignments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={11}>
-                  <Box sx={{ py: 5, textAlign: 'center' }}>
-                    <Typography color="text.secondary">
-                      No hay asignaciones de recursos para los filtros seleccionados.
-                    </Typography>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredAssignments.map((assignment) => (
-                <TableRow key={assignment.uuid} hover>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 700 }}>{assignment.resourceCode}</Typography>
-                  </TableCell>
-                  <TableCell>{assignment.resourceName}</TableCell>
-                  <TableCell>{getResourceCategoryLabel(assignment.resourceCategory)}</TableCell>
-                  <TableCell>
-                    <ResourceOperationalStatusChip status={assignment.operationalStatus} />
-                  </TableCell>
-                  <TableCell>{assignment.task?.name ?? 'Proyecto completo'}</TableCell>
-                  <TableCell>{assignment.startDate}</TableCell>
-                  <TableCell>{assignment.endDate}</TableCell>
-                  <TableCell>
-                    <TemporalStatusChip status={assignment.temporalStatus} />
-                  </TableCell>
-                  <TableCell align="right">{assignment.assignedDays}</TableCell>
-                  <TableCell>
-                    <CurrentAvailabilityChip status={assignment.currentAvailability} />
-                  </TableCell>
-                  <TableCell>{assignment.authorizedNotes ?? 'Sin observaciones'}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {!hasGeneratedReport ? (
+        <Paper elevation={0} sx={{ border: 1, borderColor: 'divider', p: { xs: 3, md: 4 } }}>
+          <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center' }}>
+            <SearchOutlinedIcon color="primary" aria-hidden="true" />
+            <Typography component="h3" variant="h6">
+              Seleccione filtros y genere el reporte
+            </Typography>
+          </Stack>
+        </Paper>
+      ) : null}
+
+      {isLoading ? (
+        <Stack alignItems="center" spacing={2} sx={{ py: 6 }}>
+          <CircularProgress aria-label="Cargando carga y utilizacion de recursos" />
+          <Typography color="text.secondary">Generando reporte</Typography>
+        </Stack>
+      ) : null}
+
+      {!isLoading && error !== null ? <Alert severity="error">{error}</Alert> : null}
+
+      {!isLoading && report !== null ? (
+        <Stack spacing={3}>
+          <MetricGrid metrics={metrics} />
+          <Typography variant="body2" color="text.secondary">
+            {report.datePolicy}
+          </Typography>
+          <ResourcesReportTable items={report.items} />
+        </Stack>
+      ) : null}
     </Stack>
   );
 }
 
-function filterAssignments(
-  assignments: readonly ResourceUtilizationAssignment[],
-  filters: Filters,
-): ResourceUtilizationAssignment[] {
-  return assignments.filter((assignment) => {
-    const categoryMatches =
-      filters.category.length === 0 || assignment.resourceCategory === filters.category;
-    const taskMatches =
-      filters.taskUuid.length === 0 ||
-      (filters.taskUuid === '__project__'
-        ? assignment.task === null
-        : assignment.task?.uuid === filters.taskUuid);
-    const temporalStatusMatches =
-      filters.temporalStatus.length === 0 || assignment.temporalStatus === filters.temporalStatus;
-
-    return categoryMatches && taskMatches && temporalStatusMatches;
-  });
+function ResourcesReportTable({ items }: { items: readonly ResourcesReportItem[] }) {
+  return (
+    <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+      <Table aria-label="Carga y utilizacion de recursos">
+        <TableHead>
+          <TableRow>
+            <TableCell>Tipo</TableCell>
+            <TableCell>Proyecto</TableCell>
+            <TableCell>Recurso</TableCell>
+            <TableCell>Detalle</TableCell>
+            <TableCell align="right">Horas</TableCell>
+            <TableCell align="right">Dias</TableCell>
+            <TableCell>Periodo</TableCell>
+            <TableCell>Estado</TableCell>
+            <TableCell>Observaciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {items.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={9}>
+                <Box sx={{ py: 5, textAlign: 'center' }}>
+                  <Typography color="text.secondary">
+                    No hay recursos para los filtros seleccionados.
+                  </Typography>
+                </Box>
+              </TableCell>
+            </TableRow>
+          ) : (
+            items.map((item, index) => (
+              <TableRow
+                key={`${item.itemType}-${item.projectUuid}-${item.resourceName}-${index.toString()}`}
+                hover
+              >
+                <TableCell>
+                  <Chip
+                    label={getResourcesReportItemTypeLabel(item.itemType)}
+                    size="small"
+                    color={item.itemType === 'HUMAN' ? 'primary' : 'info'}
+                    variant={item.itemType === 'HUMAN' ? 'filled' : 'outlined'}
+                  />
+                </TableCell>
+                <TableCell>{item.projectName}</TableCell>
+                <TableCell>
+                  <Typography sx={{ fontWeight: 700 }}>{item.resourceName}</Typography>
+                  {item.resourceCode !== null ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {item.resourceCode}
+                    </Typography>
+                  ) : null}
+                </TableCell>
+                <TableCell>{renderResourceDetail(item)}</TableCell>
+                <TableCell align="right">
+                  {item.assignedHours === null ? 'No aplica' : formatHours(item.assignedHours)}
+                </TableCell>
+                <TableCell align="right">{item.assignedDays ?? 'No aplica'}</TableCell>
+                <TableCell>{formatPeriod(item)}</TableCell>
+                <TableCell>{renderStatus(item)}</TableCell>
+                <TableCell>{item.authorizedNotes ?? 'Sin observaciones'}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 }
 
-function buildTaskOptions(
-  assignments: readonly ResourceUtilizationAssignment[],
-): NonNullable<ResourceUtilizationAssignment['task']>[] {
-  const tasks = new Map<string, NonNullable<ResourceUtilizationAssignment['task']>>();
-
-  assignments.forEach((assignment) => {
-    if (assignment.task !== null) {
-      tasks.set(assignment.task.uuid, assignment.task);
-    }
-  });
-
-  return Array.from(tasks.values()).sort((firstTask, secondTask) =>
-    firstTask.name.localeCompare(secondTask.name),
+function MetricGrid({ metrics }: { metrics: readonly { label: string; value: string }[] }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 2,
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, 1fr)' },
+      }}
+    >
+      {metrics.map((metric) => (
+        <Paper key={metric.label} elevation={0} sx={{ border: 1, borderColor: 'divider', p: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {metric.label}
+          </Typography>
+          <Typography variant="h6">{metric.value}</Typography>
+        </Paper>
+      ))}
+    </Box>
   );
+}
+
+function renderResourceDetail(item: ResourcesReportItem) {
+  if (item.itemType === 'HUMAN') {
+    return item.user?.email ?? 'Sin correo';
+  }
+
+  return item.resourceCategory === null ? 'Sin categoria' : getResourceCategoryLabel(item.resourceCategory);
+}
+
+function renderStatus(item: ResourcesReportItem) {
+  if (item.itemType === 'HUMAN') {
+    return 'Horas asignadas';
+  }
+
+  return (
+    <Stack spacing={0.75} alignItems="flex-start">
+      {item.operationalStatus !== null ? (
+        <ResourceOperationalStatusChip status={item.operationalStatus} />
+      ) : null}
+      {item.temporalStatus !== null ? <TemporalStatusChip status={item.temporalStatus} /> : null}
+      {item.currentAvailability !== null ? (
+        <CurrentAvailabilityChip status={item.currentAvailability} />
+      ) : null}
+    </Stack>
+  );
+}
+
+function formatPeriod(item: ResourcesReportItem): string {
+  if (item.startDate === null || item.endDate === null) {
+    return 'Periodo filtrado';
+  }
+
+  return `${item.startDate} al ${item.endDate}`;
 }
 
 function TemporalStatusChip({ status }: { status: ResourceAssignmentTemporalStatus }) {
@@ -387,4 +468,22 @@ function CurrentAvailabilityChip({ status }: { status: ResourceCurrentAvailabili
       variant={status === 'DISPONIBLE' ? 'filled' : 'outlined'}
     />
   );
+}
+
+function isValidFilterSelection(filters: Filters): boolean {
+  if (filters.periodMode === 'month') {
+    return filters.month.length > 0;
+  }
+
+  return (
+    filters.startDate.length > 0 &&
+    filters.endDate.length > 0 &&
+    filters.startDate <= filters.endDate
+  );
+}
+
+function formatHours(value: string): string {
+  return `${new Intl.NumberFormat('es-BO', {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} h`;
 }

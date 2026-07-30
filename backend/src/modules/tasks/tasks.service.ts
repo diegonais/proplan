@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
 import {
@@ -53,6 +54,7 @@ export class TasksService {
   ): Promise<TaskResponseDto> {
     const project = await this.findActiveProjectOrFail(projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
     this.ensureDateRangeIsValid(createTaskDto.startDate, createTaskDto.endDate);
     this.ensureStatusAndProgressAreConsistent(
       createTaskDto.status ?? TaskStatus.PENDING,
@@ -127,6 +129,7 @@ export class TasksService {
     const task = await this.findActiveTaskOrFail(uuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     const nextStartDate = updateTaskDto.startDate ?? task.startDate;
     const nextEndDate = updateTaskDto.endDate ?? task.endDate;
@@ -225,6 +228,7 @@ export class TasksService {
 
     await this.ensureTaskAssignedToUser(task.uuid, currentUser.uuid);
     await this.ensureCanAccessProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
     this.ensureStatusAndProgressAreConsistent(
       updateOwnTaskProgressDto.status,
       updateOwnTaskProgressDto.progress,
@@ -242,6 +246,7 @@ export class TasksService {
     const task = await this.findActiveTaskOrFail(uuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     const activeSubtasks = await this.tasksRepository.count({
       where: { parentTaskUuid: task.uuid },
@@ -343,6 +348,12 @@ export class TasksService {
     }
 
     throw new ForbiddenException('No tiene permiso para administrar actividades de este proyecto.');
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private canViewFinancials(project: Project, currentUser: AuthenticatedUser): boolean {

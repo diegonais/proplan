@@ -158,6 +158,23 @@ describe('Tasks and task dependencies rules', () => {
     ).rejects.toThrow('progreso 100');
   });
 
+  it('rejects activity changes and own progress updates when the project is completed', async () => {
+    project.status = ProjectStatus.COMPLETED;
+    const task = await saveTask(tasksRepository, project.uuid);
+    taskAssignmentsRepository.assignments.push(createTaskAssignment(task.uuid, regularUser.uuid));
+
+    await expect(
+      tasksService.create(project.uuid, createTaskInput(), managerUser),
+    ).rejects.toThrow('proyecto finalizado');
+    await expect(
+      tasksService.updateOwnProgress(
+        task.uuid,
+        { status: TaskStatus.IN_PROGRESS, progress: 45 },
+        regularUser,
+      ),
+    ).rejects.toThrow('proyecto finalizado');
+  });
+
   it('rejects creating activities when planned budget exceeds the approved project budget', async () => {
     await saveTask(tasksRepository, project.uuid, { plannedBudget: '900.00' });
 
@@ -458,7 +475,7 @@ function createProject(overrides: Partial<Project>): Project {
     objective: 'Planificar el proyecto.',
     startDate: overrides.startDate ?? '2026-08-01',
     endDate: overrides.endDate ?? '2026-08-31',
-    status: ProjectStatus.PLANNING,
+    status: overrides.status ?? ProjectStatus.PLANNING,
     approvedBudget: overrides.approvedBudget ?? '0.00',
     managerUuid,
     createdAt: new Date('2026-07-24T18:30:00.000Z'),

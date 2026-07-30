@@ -17,6 +17,7 @@ import { TaskAssignment } from '../task-assignments/entities/task-assignment.ent
 import { TaskDependency } from '../task-dependencies/entities/task-dependency.entity';
 import { Task } from '../tasks/entities/task.entity';
 import { User } from '../users/entities/user.entity';
+import { ResourcesReportTypeFilter } from './dto/resources-report-query.dto';
 import { ReportsService } from './reports.service';
 
 const adminUser = createAuthenticatedUser('11111111-1111-4111-8111-111111111111', UserRole.ADMIN);
@@ -304,6 +305,73 @@ describe('ReportsService', () => {
     ]);
   });
 
+  it('returns unified human and material resources filtered by month', async () => {
+    resourceAssignmentsRepository.setAssignments([
+      createResourceAssignment({
+        resource: createResource({
+          uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+          code: 'LAP-001',
+          category: ResourceCategory.LAPTOP,
+        }),
+        startDate: '2026-08-01',
+        endDate: '2026-08-03',
+        task: parentTask,
+      }),
+      createResourceAssignment({
+        resource: createResource({
+          uuid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+          code: 'SRV-001',
+          category: ResourceCategory.SERVER,
+        }),
+        startDate: '2026-09-01',
+        endDate: '2026-09-03',
+      }),
+    ]);
+
+    const report = await service.getResourcesReport(
+      {
+        month: '2026-08',
+        resourceType: ResourcesReportTypeFilter.ALL,
+      },
+      managerUser,
+    );
+
+    expect(report.filters).toMatchObject({
+      projectUuid: null,
+      month: '2026-08',
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    });
+    expect(report.summary).toMatchObject({
+      totalHumanResources: 1,
+      totalMaterialResources: 1,
+      totalAssignedHours: '8.50',
+      totalMaterialAssignmentDays: 3,
+    });
+    expect(report.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          itemType: 'HUMAN',
+          resourceName: 'Recurso',
+          assignedHours: '8.50',
+        }),
+        expect.objectContaining({
+          itemType: 'MATERIAL',
+          resourceCode: 'LAP-001',
+          assignedDays: 3,
+          taskName: parentTask.name,
+        }),
+      ]),
+    );
+    expect(report.items).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resourceCode: 'SRV-001',
+        }),
+      ]),
+    );
+  });
+
   it('rejects resource utilization for users outside the project', async () => {
     await expect(
       service.getProjectResourceUtilization(project.uuid, outsiderUser),
@@ -583,7 +651,9 @@ class InMemoryResourceAssignmentsRepository {
 }
 
 class InMemoryResourceAssignmentQueryBuilder {
-  private projectUuid: string | null = null;
+  private projectUuids: readonly string[] = [];
+  private reportStartDate: string | null = null;
+  private reportEndDate: string | null = null;
 
   constructor(private readonly assignments: readonly ResourceAssignment[]) {}
 
@@ -599,12 +669,24 @@ class InMemoryResourceAssignmentQueryBuilder {
     return this;
   }
 
-  where(_condition: string, params: { projectUuid: string }): this {
-    this.projectUuid = params.projectUuid;
+  where(_condition: string, params: { projectUuid?: string; projectUuids?: readonly string[] }): this {
+    this.projectUuids =
+      params.projectUuids ?? (params.projectUuid === undefined ? [] : [params.projectUuid]);
     return this;
   }
 
-  andWhere(): this {
+  andWhere(
+    _condition?: string,
+    params?: { reportStartDate?: string; reportEndDate?: string },
+  ): this {
+    if (params?.reportStartDate !== undefined) {
+      this.reportStartDate = params.reportStartDate;
+    }
+
+    if (params?.reportEndDate !== undefined) {
+      this.reportEndDate = params.reportEndDate;
+    }
+
     return this;
   }
 
@@ -621,7 +703,10 @@ class InMemoryResourceAssignmentQueryBuilder {
       this.assignments
         .filter(
           (assignment) =>
-            assignment.projectUuid === this.projectUuid && assignment.deletedAt === null,
+            this.projectUuids.includes(assignment.projectUuid) &&
+            assignment.deletedAt === null &&
+            (this.reportEndDate === null || assignment.startDate <= this.reportEndDate) &&
+            (this.reportStartDate === null || assignment.endDate >= this.reportStartDate),
         )
         .sort((firstAssignment, secondAssignment) => {
           const startComparison = firstAssignment.startDate.localeCompare(
@@ -644,6 +729,8 @@ class InMemoryResourceAssignmentQueryBuilder {
 
 class InMemoryAssignmentQueryBuilder {
   private projectUuids: readonly string[] = [];
+  private reportStartDate: string | null = null;
+  private reportEndDate: string | null = null;
 
   constructor(private readonly assignments: readonly TaskAssignment[]) {}
 
@@ -664,7 +751,18 @@ class InMemoryAssignmentQueryBuilder {
     return this;
   }
 
-  andWhere(): this {
+  andWhere(
+    _condition?: string,
+    params?: { reportStartDate?: string; reportEndDate?: string },
+  ): this {
+    if (params?.reportStartDate !== undefined) {
+      this.reportStartDate = params.reportStartDate;
+    }
+
+    if (params?.reportEndDate !== undefined) {
+      this.reportEndDate = params.reportEndDate;
+    }
+
     return this;
   }
 
@@ -685,6 +783,13 @@ class InMemoryAssignmentQueryBuilder {
 
     this.assignments.forEach((assignment) => {
       if (!this.projectUuids.includes(assignment.task.projectUuid)) {
+        return;
+      }
+
+      if (
+        (this.reportEndDate !== null && assignment.task.startDate > this.reportEndDate) ||
+        (this.reportStartDate !== null && assignment.task.endDate < this.reportStartDate)
+      ) {
         return;
       }
 

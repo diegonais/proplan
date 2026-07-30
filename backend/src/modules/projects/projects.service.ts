@@ -167,6 +167,7 @@ export class ProjectsService {
   ): Promise<ProjectResponseDto> {
     const project = await this.findActiveProjectOrFail(uuid);
     this.ensureCanManage(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     if (updateProjectDto.managerUuid !== undefined && currentUser.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Solamente el Administrador puede reasignar el jefe de proyecto.');
@@ -236,6 +237,7 @@ export class ProjectsService {
   async remove(uuid: string, currentUser: AuthenticatedUser): Promise<void> {
     const project = await this.findActiveProjectOrFail(uuid);
     this.ensureCanManage(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     await this.projectsRepository.softRemove(project);
   }
@@ -310,6 +312,12 @@ export class ProjectsService {
     }
 
     throw new ForbiddenException('No tiene permiso para administrar este proyecto.');
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private canViewFinancials(project: Project, currentUser: AuthenticatedUser): boolean {

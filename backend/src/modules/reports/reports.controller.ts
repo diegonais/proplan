@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Res, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -21,6 +21,8 @@ import { DashboardReportResponseDto } from './dto/dashboard-report-response.dto'
 import { GanttReportResponseDto } from './dto/gantt-report-response.dto';
 import { ProjectStatusReportResponseDto } from './dto/project-status-report-response.dto';
 import { ResourceUtilizationReportResponseDto } from './dto/resource-utilization-report-response.dto';
+import { ResourcesReportQueryDto } from './dto/resources-report-query.dto';
+import { ResourcesReportResponseDto } from './dto/resources-report-response.dto';
 import {
   TrafficLightReportResponseDto,
   WorkloadReportItemResponseDto,
@@ -46,6 +48,16 @@ export class ReportsController {
   @ApiOkResponse({ type: DashboardReportResponseDto })
   getDashboard(@CurrentUser() currentUser: AuthenticatedUser): Promise<DashboardReportResponseDto> {
     return this.reportsService.getDashboard(currentUser);
+  }
+
+  @Get('reports/resources')
+  @ApiOperation({ summary: 'Consultar carga y utilizacion general de recursos con filtros.' })
+  @ApiOkResponse({ type: ResourcesReportResponseDto })
+  getResourcesReport(
+    @Query() query: ResourcesReportQueryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<ResourcesReportResponseDto> {
+    return this.reportsService.getResourcesReport(query, currentUser);
   }
 
   @Get('projects/:projectUuid/reports/gantt')

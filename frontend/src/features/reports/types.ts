@@ -169,6 +169,54 @@ export interface ResourceUtilizationReport {
   assignments: ResourceUtilizationAssignment[];
 }
 
+export type ResourcesReportTypeFilter = 'ALL' | 'HUMAN' | 'MATERIAL';
+
+export type ResourcesReportItemType = 'HUMAN' | 'MATERIAL';
+
+export interface ResourcesReportFilters {
+  projectUuid: string | null;
+  resourceType: ResourcesReportTypeFilter;
+  month: string | null;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface ResourcesReportSummary {
+  totalHumanResources: number;
+  totalMaterialResources: number;
+  totalAssignedHours: string;
+  totalMaterialAssignmentDays: number;
+  activeMaterialAssignments: number;
+}
+
+export interface ResourcesReportItem {
+  itemType: ResourcesReportItemType;
+  projectUuid: string;
+  projectName: string;
+  user: WorkloadItem['user'] | null;
+  resourceUuid: string | null;
+  resourceName: string;
+  resourceCode: string | null;
+  resourceCategory: ResourceCategory | null;
+  operationalStatus: ResourceOperationalStatus | null;
+  assignedHours: string | null;
+  assignedDays: number | null;
+  taskName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  temporalStatus: ResourceAssignmentTemporalStatus | null;
+  currentAvailability: ResourceCurrentAvailabilityStatus | null;
+  authorizedNotes: string | null;
+}
+
+export interface ResourcesReport {
+  datePolicy: string;
+  today: string;
+  filters: ResourcesReportFilters;
+  summary: ResourcesReportSummary;
+  items: ResourcesReportItem[];
+}
+
 export function getTrafficLightLabel(color: TrafficLightColor): string {
   const labels: Record<TrafficLightColor, string> = {
     GREEN: 'Verde',
@@ -190,4 +238,23 @@ export function getResourceCurrentAvailabilityStatusLabel(
   };
 
   return labels[status];
+}
+
+export function getResourcesReportTypeFilterLabel(type: ResourcesReportTypeFilter): string {
+  const labels: Record<ResourcesReportTypeFilter, string> = {
+    ALL: 'Todos',
+    HUMAN: 'Recursos humanos',
+    MATERIAL: 'Recursos materiales',
+  };
+
+  return labels[type];
+}
+
+export function getResourcesReportItemTypeLabel(type: ResourcesReportItemType): string {
+  const labels: Record<ResourcesReportItemType, string> = {
+    HUMAN: 'Humano',
+    MATERIAL: 'Material',
+  };
+
+  return labels[type];
 }

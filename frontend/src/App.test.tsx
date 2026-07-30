@@ -1087,6 +1087,43 @@ describe('Project detail behavior', () => {
     expect(screen.queryByLabelText('Eliminar actividad')).not.toBeInTheDocument();
   });
 
+  it('shows completed projects as read-only and hides operational actions', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute({ ...sampleProject, status: 'COMPLETED' }),
+      createResourceAssignmentsRoute([]),
+      createTasksRoute([sampleTask]),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: sampleProject.name })).toBeInTheDocument();
+    expect(await screen.findByText(/El proyecto esta finalizado/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Actividades' }));
+
+    expect(await screen.findByText('Actividad principal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nueva actividad' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Actualizar avance')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Editar actividad')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Eliminar actividad')).not.toBeInTheDocument();
+  });
+
+  it('blocks direct project editing when the project is completed', async () => {
+    window.history.pushState({}, '', `/projects/${sampleProject.uuid}/edit`);
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute({ ...sampleProject, status: 'COMPLETED' }),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('No se puede modificar un proyecto finalizado.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
+  });
+
   it('keeps team management inside the project detail', async () => {
     installHttpMock([
       createMeRoute(projectManagerUser),
@@ -1470,7 +1507,7 @@ describe('Reports module', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the authorized project selector and loads Gantt after selecting a project', async () => {
+  it('shows report type buttons and loads Gantt after selecting type and project', async () => {
     installHttpMock([
       createMeRoute(adminUser),
       createProjectsListRoute([sampleProject]),
@@ -1480,16 +1517,18 @@ describe('Reports module', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Diagrama de Gantt/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Carga y utilizacion de recursos/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Presupuesto vs costos reales/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Estado general/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Diagrama de Gantt/ }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Proyecto' }));
     fireEvent.click(await screen.findByRole('option', { name: sampleProject.name }));
 
     expect(await screen.findByRole('heading', { name: 'Diagrama de Gantt' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Calendario del proyecto' })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Detalle calendario de actividades' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Carga de trabajo por recurso' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Presupuesto vs costos reales' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Estado general' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Utilizacion de recursos' })).toBeInTheDocument();
     await waitFor(() => {
       expect(
         getCapturedRequests().some(
@@ -1497,6 +1536,52 @@ describe('Reports module', () => {
             requestEntry.method === 'GET' &&
             requestEntry.url === `/projects/${sampleProject.uuid}/reports/gantt`,
         ),
+      ).toBe(true);
+    });
+  });
+
+  it('generates the general resources report only after filters are selected', async () => {
+    installHttpMock([
+      createMeRoute(adminUser),
+      createProjectsListRoute([sampleProject]),
+      createResourcesReportRoute(),
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Carga y utilizacion de recursos/ }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Carga y utilizacion de recursos' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generar reporte' })).toBeDisabled();
+    expect(
+      getCapturedRequests().some(
+        (requestEntry) => requestEntry.method === 'GET' && requestEntry.url === '/reports/resources',
+      ),
+    ).toBe(false);
+
+    fireEvent.change(screen.getByLabelText('Mes', { selector: 'input' }), {
+      target: { value: '2026-08' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generar reporte' }));
+
+    expect(await screen.findByRole('table', { name: 'Carga y utilizacion de recursos' })).toBeInTheDocument();
+    expect(screen.getByText('Ana Choque')).toBeInTheDocument();
+    expect(screen.getByText('LAP-LOG-001')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        getCapturedRequests().some((requestEntry) => {
+          const params = readParams(requestEntry.params);
+
+          return (
+            requestEntry.method === 'GET' &&
+            requestEntry.url === '/reports/resources' &&
+            params.month === '2026-08' &&
+            params.resourceType === 'ALL'
+          );
+        }),
       ).toBe(true);
     });
   });
@@ -1558,7 +1643,7 @@ describe('Reports module', () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Presupuesto vs costos reales' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Presupuesto vs costos reales/ }));
     expect(await screen.findByRole('heading', { name: 'Presupuesto vs costos reales' })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Exportar PDF' }));
 
@@ -1781,13 +1866,13 @@ function createAvailableResourcesRoute(resources: unknown[]) {
   };
 }
 
-function createProjectDetailRoute() {
+function createProjectDetailRoute(project: unknown = sampleProject) {
   return {
     method: 'GET' as const,
     url: `/projects/${sampleProject.uuid}`,
     response: {
       status: 200,
-      data: sampleProject,
+      data: project,
     },
   };
 }
@@ -1919,6 +2004,79 @@ function createBudgetReportRoute() {
         budgetExceeded: false,
         operationalBudgetPolicy: 'Se excluyen actividades CANCELLED.',
         tasks: [],
+      },
+    },
+  };
+}
+
+function createResourcesReportRoute() {
+  return {
+    method: 'GET' as const,
+    url: '/reports/resources',
+    response: {
+      status: 200,
+      data: {
+        datePolicy: 'Las fechas se presentan como YYYY-MM-DD.',
+        today: '2026-08-15',
+        filters: {
+          projectUuid: null,
+          resourceType: 'ALL',
+          month: '2026-08',
+          startDate: '2026-08-01',
+          endDate: '2026-08-31',
+        },
+        summary: {
+          totalHumanResources: 1,
+          totalMaterialResources: 1,
+          totalAssignedHours: '8.00',
+          totalMaterialAssignmentDays: 6,
+          activeMaterialAssignments: 1,
+        },
+        items: [
+          {
+            itemType: 'HUMAN',
+            projectUuid: sampleProject.uuid,
+            projectName: sampleProject.name,
+            user: {
+              uuid: managedStandardUser.uuid,
+              name: managedStandardUser.name,
+              email: managedStandardUser.email,
+              role: managedStandardUser.role,
+            },
+            resourceUuid: null,
+            resourceName: managedStandardUser.name,
+            resourceCode: null,
+            resourceCategory: null,
+            operationalStatus: null,
+            assignedHours: '8.00',
+            assignedDays: null,
+            taskName: null,
+            startDate: '2026-08-01',
+            endDate: '2026-08-31',
+            temporalStatus: null,
+            currentAvailability: null,
+            authorizedNotes: null,
+          },
+          {
+            itemType: 'MATERIAL',
+            projectUuid: sampleProject.uuid,
+            projectName: sampleProject.name,
+            user: null,
+            resourceUuid: sampleResource.uuid,
+            resourceName: sampleResource.name,
+            resourceCode: sampleResource.code,
+            resourceCategory: sampleResource.category,
+            operationalStatus: sampleResource.operationalStatus,
+            assignedHours: null,
+            assignedDays: 6,
+            taskName: sampleTask.name,
+            startDate: '2026-08-05',
+            endDate: '2026-08-10',
+            temporalStatus: 'ACTIVA',
+            currentAvailability: 'ASIGNADO',
+            authorizedNotes: 'Asignado para pruebas de campo.',
+          },
+        ],
       },
     },
   };

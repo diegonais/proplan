@@ -194,11 +194,10 @@ Usar esta vista para explicar el cronograma, los bloqueos y la secuencia del tra
 Reportes disponibles:
 
 - Dashboard general por rol.
-- Diagrama de Gantt del proyecto.
-- Carga de trabajo por recurso humano.
-- Presupuesto versus costos reales.
-- Estado general del proyecto con semaforo verde, amarillo o rojo.
-- Utilizacion de recursos.
+- Diagrama de Gantt, generado despues de seleccionar un proyecto.
+- Carga y utilizacion de recursos, generado despues de seleccionar filtros de periodo, proyecto opcional y alcance de recursos.
+- Presupuesto versus costos reales, generado despues de seleccionar un proyecto.
+- Estado general del proyecto con semaforo verde, amarillo o rojo, generado despues de seleccionar un proyecto.
 
 Escenarios del seed demo:
 

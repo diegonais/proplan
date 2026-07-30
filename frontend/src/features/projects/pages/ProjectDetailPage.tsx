@@ -51,6 +51,8 @@ export function ProjectDetailPage() {
     project !== null &&
     (user?.role === 'ADMIN' ||
       (user?.role === 'PROJECT_MANAGER' && project.managerUuid === user.uuid));
+  const isProjectCompleted = project?.status === 'COMPLETED';
+  const canModifyProject = canManageProject && !isProjectCompleted;
   const canViewOperationalTabs = canManageProject;
   const canAccessResourceCatalog = user?.role === 'ADMIN';
   const canViewReports = canManageProject;
@@ -180,7 +182,7 @@ export function ProjectDetailPage() {
               Ver reportes
             </Button>
           ) : null}
-          {canManageProject ? (
+          {canModifyProject ? (
             <>
               <Button component={Link} to={`/projects/${project.uuid}/edit`} startIcon={<EditOutlinedIcon />}>
                 Editar
@@ -199,6 +201,12 @@ export function ProjectDetailPage() {
           ) : null}
         </Stack>
       </Stack>
+
+      {isProjectCompleted ? (
+        <Alert severity="info">
+          El proyecto esta finalizado. La informacion queda disponible para consulta, pero no se permiten acciones operativas.
+        </Alert>
+      ) : null}
 
       <Paper elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
         <Tabs
@@ -284,15 +292,15 @@ export function ProjectDetailPage() {
             </Stack>
           ) : null}
           {selectedTab === 1 ? (
-            <ProjectTasksTab project={project} canManage={canManageProject} />
+            <ProjectTasksTab project={project} canManage={canModifyProject} />
           ) : null}
           {selectedTab === 2 && canViewOperationalTabs ? (
-            <ProjectTeamTab project={project} canManage={canManageProject} />
+            <ProjectTeamTab project={project} canManage={canModifyProject} />
           ) : null}
           {selectedTab === 3 && canViewOperationalTabs ? (
             <ProjectResourcesTab
               project={project}
-              canManage={canManageProject}
+              canManage={canModifyProject}
               canAccessCatalog={canAccessResourceCatalog}
               requireActivityAssignment={user.role === 'PROJECT_MANAGER'}
               onAssignmentsChanged={(assignments: ResourceAssignment[]) => {
@@ -305,7 +313,7 @@ export function ProjectDetailPage() {
           {selectedTab === 4 && canManageProject ? (
             <ProjectBudgetTab
               project={project}
-              canManage={canManageProject}
+              canManage={canModifyProject}
               onProjectUpdated={(updatedProject) => {
                 setProject(updatedProject);
               }}

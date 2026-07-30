@@ -198,6 +198,29 @@ describe('ResourceAssignmentsService', () => {
     ).resolves.toMatchObject({ startDate: '2026-08-11', endDate: '2026-08-12' });
   });
 
+  it('rejects resource assignment changes when the project is completed', async () => {
+    store.mainProject.status = ProjectStatus.COMPLETED;
+    const assignment = seedAssignment(store, {
+      resourceUuid: store.laptop.uuid,
+      startDate: '2026-08-05',
+      endDate: '2026-08-10',
+    });
+
+    await expect(
+      service.create(
+        store.mainProject.uuid,
+        { resourceUuid: store.tablet.uuid, startDate: '2026-08-11', endDate: '2026-08-12' },
+        adminUser,
+      ),
+    ).rejects.toThrow('proyecto finalizado');
+    await expect(
+      service.update(assignment.uuid, { notes: 'Cambio rechazado' }, adminUser),
+    ).rejects.toThrow('proyecto finalizado');
+    await expect(service.remove(assignment.uuid, adminUser)).rejects.toThrow(
+      'proyecto finalizado',
+    );
+  });
+
   it('rejects updates that create conflicts and excludes its own assignment otherwise', async () => {
     const firstAssignment = seedAssignment(store, {
       resourceUuid: store.laptop.uuid,

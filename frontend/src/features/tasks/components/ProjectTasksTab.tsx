@@ -90,6 +90,9 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
 
   const flattenedTasks = useMemo(() => flattenTasks(tasks), [tasks]);
   const hasTasks = tasks.length > 0;
+  const isProjectCompleted = project.status === 'COMPLETED';
+  const canManageTasks = canManage && !isProjectCompleted;
+  const canUpdateOwnProgress = !canManage && !isProjectCompleted;
 
   const handleSubmitTask = async (payload: TaskPayload) => {
     if (formState === null) {
@@ -164,7 +167,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
             Planificacion padre-hijo y dependencias fin a inicio del proyecto.
           </Typography>
         </Box>
-        {canManage ? (
+        {canManageTasks ? (
           <Button
             variant="contained"
             startIcon={<AddOutlinedIcon />}
@@ -250,7 +253,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
                     <TableCell align="right">{formatMoney(task.plannedBudget)}</TableCell>
                     <TableCell align="right">{formatMoney(task.actualCost)}</TableCell>
                     <TableCell align="right">
-                      {canManage ? (
+                      {canManageTasks ? (
                         <Tooltip title="Asignaciones">
                           <IconButton
                             aria-label="Asignaciones"
@@ -261,7 +264,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
                             <GroupOutlinedIcon />
                           </IconButton>
                         </Tooltip>
-                      ) : (
+                      ) : canUpdateOwnProgress ? (
                         <Tooltip title="Actualizar avance">
                           <IconButton
                             aria-label="Actualizar avance"
@@ -273,7 +276,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
                             <EditOutlinedIcon />
                           </IconButton>
                         </Tooltip>
-                      )}
+                      ) : null}
                       <Tooltip title="Dependencias">
                         <IconButton
                           aria-label="Dependencias"
@@ -284,7 +287,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
                           <LinkOutlinedIcon />
                         </IconButton>
                       </Tooltip>
-                      {canManage ? (
+                      {canManageTasks ? (
                         <>
                           <Tooltip title="Crear subactividad">
                             <IconButton
@@ -365,7 +368,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
         open={dependenciesTask !== null}
         task={dependenciesTask}
         tasks={tasks}
-        canManage={canManage}
+        canManage={canManageTasks}
         onClose={() => {
           setDependenciesTask(null);
         }}
@@ -374,7 +377,7 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
       <TaskAssignmentsDialog
         open={assignmentsTask !== null}
         task={assignmentsTask}
-        canManage={canManage}
+        canManage={canManageTasks}
         onClose={() => {
           setAssignmentsTask(null);
         }}

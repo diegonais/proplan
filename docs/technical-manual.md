@@ -141,7 +141,7 @@ El PDF de proyecto incluye "Recursos asignados" con codigo, nombre, categoria, e
 
 El Excel contiene hojas separadas para `Recursos` y `Asignaciones de recursos`. Las celdas de texto controladas por usuarios se prefijan cuando empiezan con `=`, `+`, `-` o `@` para prevenir inyeccion de formulas.
 
-El dashboard mantiene una vision general: proyectos activos, actividades pendientes, miembros visibles, avance promedio y tres contadores agregados de recursos visibles. La utilizacion detallada permanece en el modulo Reportes.
+El dashboard mantiene una vision general: proyectos activos, actividades pendientes, miembros visibles, avance promedio y tres contadores agregados de recursos visibles. La carga y utilizacion detallada de recursos permanece en el modulo Reportes mediante una vista general filtrable por periodo, proyecto opcional y alcance humano o material.
 
 ## Variables
 

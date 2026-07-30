@@ -117,6 +117,20 @@ export function ProjectEditPage() {
     );
   }
 
+  if (project.status === 'COMPLETED') {
+    return (
+      <Stack spacing={2}>
+        <Typography component="h1" variant="h1">
+          Editar proyecto
+        </Typography>
+        <Alert severity="info">No se puede modificar un proyecto finalizado.</Alert>
+        <Button component={Link} to={`/projects/${project.uuid}`} startIcon={<ArrowBackOutlinedIcon />}>
+          Volver al proyecto
+        </Button>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={3}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">

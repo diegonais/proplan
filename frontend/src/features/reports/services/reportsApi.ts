@@ -7,6 +7,8 @@ import {
   ProjectBudgetReport,
   ResourceUtilizationReport,
   ProjectStatusReport,
+  ResourcesReport,
+  ResourcesReportTypeFilter,
   TrafficLightReport,
 } from '../types';
 import { WorkloadItem } from '../../team/types';
@@ -14,6 +16,14 @@ import { WorkloadItem } from '../../team/types';
 export interface ProjectExportDownload {
   blob: Blob;
   fileName: string;
+}
+
+export interface ResourcesReportParams {
+  projectUuid?: string;
+  resourceType?: ResourcesReportTypeFilter;
+  month?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export async function getDashboardReport(): Promise<DashboardReport> {
@@ -40,6 +50,14 @@ export async function getProjectResourceUtilizationReport(
   const response = await httpClient.get<ResourceUtilizationReport>(
     `/projects/${projectUuid}/reports/resource-utilization`,
   );
+
+  return response.data;
+}
+
+export async function getResourcesReport(params: ResourcesReportParams): Promise<ResourcesReport> {
+  const response = await httpClient.get<ResourcesReport>('/reports/resources', {
+    params: removeEmptyParams(params),
+  });
 
   return response.data;
 }
@@ -141,6 +159,12 @@ function readHeader(headers: unknown, headerName: string): string | undefined {
 
 function hasHeaderGetter(headers: object): headers is { get: (headerName: string) => unknown } {
   return 'get' in headers && typeof headers.get === 'function';
+}
+
+function removeEmptyParams<T extends object>(params: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== ''),
+  ) as Partial<T>;
 }
 
 async function normalizeBlobDownloadError(error: unknown): Promise<unknown> {

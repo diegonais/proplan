@@ -174,6 +174,18 @@ describe('ProjectsService', () => {
     );
   });
 
+  it('rejects updates and deletion when the project is completed', async () => {
+    const project = await service.create(
+      createProjectInput({ managerUuid: managerUser.uuid, status: ProjectStatus.COMPLETED }),
+      adminUser,
+    );
+
+    await expect(
+      service.update(project.uuid, { name: 'Cambio rechazado' }, adminUser),
+    ).rejects.toThrow('proyecto finalizado');
+    await expect(service.remove(project.uuid, adminUser)).rejects.toThrow('proyecto finalizado');
+  });
+
   it('rejects project date updates that would leave activities outside the project range', async () => {
     const project = await service.create(
       createProjectInput({ managerUuid: managerUser.uuid }),

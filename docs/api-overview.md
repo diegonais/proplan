@@ -126,6 +126,7 @@ En interfaz se usa Actividad. En API y codigo se usa `Task`.
 | Metodo | Ruta | Roles | Descripcion |
 | --- | --- | --- | --- |
 | `GET` | `/reports/dashboard` | Todos | Dashboard filtrado por rol. |
+| `GET` | `/reports/resources` | `ADMIN`, `PROJECT_MANAGER` | Carga y utilizacion general de recursos con filtros opcionales por `projectUuid`, `month`, `startDate`, `endDate` y `resourceType`. |
 | `GET` | `/projects/:projectUuid/reports/gantt` | Todos con acceso | Datos de Gantt con actividades, subactividades, fechas, avance y dependencias. |
 | `GET` | `/projects/:projectUuid/reports/workload` | Todos con acceso | Carga de trabajo por recurso humano. |
 | `GET` | `/projects/:projectUuid/reports/budget` | `ADMIN`, `PROJECT_MANAGER` | Presupuesto versus costos reales. |

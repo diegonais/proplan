@@ -162,6 +162,19 @@ describe('FinancesService', () => {
     });
   });
 
+  it('rejects financial updates when the project is completed', async () => {
+    project.status = ProjectStatus.COMPLETED;
+    const task = createTask(project.uuid);
+    tasksRepository.tasks.push(task);
+
+    await expect(
+      service.updateProjectBudget(project.uuid, { approvedBudget: '2500.99' }, managerUser),
+    ).rejects.toThrow('proyecto finalizado');
+    await expect(
+      service.updateTaskFinancials(task.uuid, { actualCost: '100.00' }, managerUser),
+    ).rejects.toThrow('proyecto finalizado');
+  });
+
   it('rejects reducing approved budget below distributed activity budgets', async () => {
     tasksRepository.tasks.push(
       createTask(project.uuid, { plannedBudget: '900.00' }),
@@ -297,7 +310,7 @@ function createProject(overrides: Partial<Project> = {}): Project {
     objective: 'Planificar el proyecto.',
     startDate: '2026-08-01',
     endDate: '2026-08-31',
-    status: ProjectStatus.PLANNING,
+    status: overrides.status ?? ProjectStatus.PLANNING,
     approvedBudget: overrides.approvedBudget ?? '0.00',
     managerUuid,
     createdAt: new Date('2026-07-24T18:30:00.000Z'),

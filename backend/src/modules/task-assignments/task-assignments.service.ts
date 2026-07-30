@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
@@ -43,6 +44,7 @@ export class TaskAssignmentsService {
     const task = await this.findActiveTaskOrFail(taskUuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
     const user = await this.findAssignableUserOrFail(project.uuid, createTaskAssignmentDto.userUuid);
 
     const existingAssignment = await this.taskAssignmentsRepository.findOne({
@@ -102,6 +104,7 @@ export class TaskAssignmentsService {
     const task = await this.findActiveTaskOrFail(assignment.taskUuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     if (updateTaskAssignmentDto.assignedHours !== undefined) {
       assignment.assignedHours = formatDecimal(updateTaskAssignmentDto.assignedHours);
@@ -118,6 +121,7 @@ export class TaskAssignmentsService {
     const task = await this.findActiveTaskOrFail(assignment.taskUuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     await this.taskAssignmentsRepository.remove(assignment);
   }
@@ -130,6 +134,7 @@ export class TaskAssignmentsService {
     const task = await this.findActiveTaskOrFail(taskUuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     const assignment = await this.taskAssignmentsRepository.findOne({
       where: { taskUuid: task.uuid, userUuid },
@@ -258,6 +263,12 @@ export class TaskAssignmentsService {
     }
 
     throw new ForbiddenException('No tiene permiso para administrar asignaciones de este proyecto.');
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private async markMainResponsible(

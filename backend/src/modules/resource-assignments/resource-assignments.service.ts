@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, QueryFailedError, Repository, SelectQueryBuilder } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { ResourceOperationalStatus } from '../../common/enums/resource-operational-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
@@ -77,6 +78,7 @@ export class ResourceAssignmentsService {
       return await this.dataSource.transaction(async (entityManager) => {
         const project = await this.findActiveProjectOrFail(entityManager, projectUuid);
         this.ensureCanManageProject(project, currentUser);
+        this.ensureProjectCanBeModified(project);
         const requestedTaskUuid = createResourceAssignmentDto.taskUuid ?? null;
         this.ensureProjectManagerAssignsToTask(currentUser, requestedTaskUuid);
 
@@ -223,6 +225,7 @@ export class ResourceAssignmentsService {
           assignment.projectUuid,
         );
         this.ensureCanManageProject(currentProject, currentUser);
+        this.ensureProjectCanBeModified(currentProject);
 
         const nextResourceUuid = updateResourceAssignmentDto.resourceUuid ?? assignment.resourceUuid;
         const nextStartDate = updateResourceAssignmentDto.startDate ?? assignment.startDate;
@@ -288,6 +291,7 @@ export class ResourceAssignmentsService {
       const assignment = await this.findAssignmentWithLockOrFail(entityManager, uuid);
       const project = await this.findActiveProjectOrFail(entityManager, assignment.projectUuid);
       this.ensureCanManageProject(project, currentUser);
+      this.ensureProjectCanBeModified(project);
 
       await entityManager.getRepository(ResourceAssignment).softRemove(assignment);
     });
@@ -302,6 +306,7 @@ export class ResourceAssignmentsService {
 
     const project = await this.findActiveProjectOrFail(this.dataSource.manager, projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
     this.ensureProjectManagerAssignsToTask(currentUser, query.taskUuid ?? null);
     const task = await this.resolveTaskOrFail(
       this.dataSource.manager,
@@ -523,6 +528,12 @@ export class ResourceAssignmentsService {
     }
 
     throw new ForbiddenException('No tiene permiso para administrar asignaciones de este proyecto.');
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private ensureProjectManagerAssignsToTask(

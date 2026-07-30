@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { TaskStatus } from '../../common/enums/task-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
@@ -61,6 +62,7 @@ export class FinancesService {
   ): Promise<ProjectResponseDto> {
     const project = await this.findActiveProjectOrFail(projectUuid);
     this.ensureCanManageFinancials(project, currentUser);
+    this.ensureProjectCanBeModified(project);
     const approvedBudget = normalizeMoney(updateProjectBudgetDto.approvedBudget);
 
     await this.ensureApprovedBudgetCanCoverDistributedBudget(project.uuid, approvedBudget);
@@ -87,6 +89,7 @@ export class FinancesService {
     const task = await this.findActiveTaskOrFail(taskUuid);
     const project = await this.findActiveProjectOrFail(task.projectUuid);
     this.ensureCanManageFinancials(project, currentUser);
+    this.ensureProjectCanBeModified(project);
     const nextPlannedBudget =
       updateTaskFinancialsDto.plannedBudget === undefined
         ? task.plannedBudget
@@ -148,6 +151,12 @@ export class FinancesService {
 
   private ensureCanManageFinancials(project: Project, currentUser: AuthenticatedUser): void {
     this.ensureCanViewFinancials(project, currentUser);
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private async ensureApprovedBudgetCanCoverDistributedBudget(

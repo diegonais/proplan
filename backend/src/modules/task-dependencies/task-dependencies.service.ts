@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { TaskDependencyType } from '../../common/enums/task-dependency-type.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
@@ -49,6 +50,7 @@ export class TaskDependenciesService {
     const predecessorTask = await this.findActiveTaskOrFail(createDependencyDto.predecessorTaskUuid);
     const project = await this.findActiveProjectOrFail(successorTask.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     if (predecessorTask.projectUuid !== successorTask.projectUuid) {
       throw new BadRequestException(
@@ -133,6 +135,7 @@ export class TaskDependenciesService {
 
     const project = await this.findActiveProjectOrFail(dependency.successorTask.projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     await this.taskDependenciesRepository.remove(dependency);
   }
@@ -189,6 +192,12 @@ export class TaskDependenciesService {
     }
 
     throw new ForbiddenException('No tiene permiso para administrar dependencias de este proyecto.');
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private async isProjectMember(projectUuid: string, userUuid: string): Promise<boolean> {

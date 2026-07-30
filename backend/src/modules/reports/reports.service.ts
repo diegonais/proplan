@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 
@@ -34,6 +34,15 @@ import {
   ResourceUtilizationAssignmentResponseDto,
   ResourceUtilizationReportResponseDto,
 } from './dto/resource-utilization-report-response.dto';
+import {
+  ResourcesReportItemResponseDto,
+  ResourcesReportItemType,
+  ResourcesReportResponseDto,
+} from './dto/resources-report-response.dto';
+import {
+  ResourcesReportQueryDto,
+  ResourcesReportTypeFilter,
+} from './dto/resources-report-query.dto';
 import {
   TrafficLightReportResponseDto,
   WorkloadReportItemResponseDto,
@@ -158,18 +167,7 @@ export class ReportsService {
     const project = await this.findActiveProjectOrFail(projectUuid);
     await this.ensureCanAccessProject(project, currentUser);
     const today = getTodayInLaPaz();
-    const assignments = await this.resourceAssignmentsRepository
-      .createQueryBuilder('assignment')
-      .withDeleted()
-      .innerJoinAndSelect('assignment.resource', 'resource')
-      .innerJoinAndSelect('assignment.project', 'project')
-      .leftJoinAndSelect('assignment.task', 'task')
-      .where('assignment.projectUuid = :projectUuid', { projectUuid: project.uuid })
-      .andWhere('assignment.deletedAt IS NULL')
-      .orderBy('assignment.startDate', 'ASC')
-      .addOrderBy('assignment.endDate', 'ASC')
-      .addOrderBy('resource.code', 'ASC')
-      .getMany();
+    const assignments = await this.findResourceUtilizationAssignments([project.uuid]);
     const activeResourceUuids = await this.findCurrentlyAssignedResourceUuids(
       assignments.map((assignment) => assignment.resourceUuid),
       today,
@@ -190,6 +188,65 @@ export class ReportsService {
       today,
       summary: buildResourceUtilizationSummary(reportAssignments),
       assignments: reportAssignments,
+    };
+  }
+
+  async getResourcesReport(
+    query: ResourcesReportQueryDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<ResourcesReportResponseDto> {
+    const dateRange = resolveResourcesReportDateRange(query);
+    const projects =
+      query.projectUuid === undefined
+        ? await this.findVisibleProjects(currentUser)
+        : [await this.findActiveProjectOrFail(query.projectUuid)];
+
+    if (query.projectUuid !== undefined) {
+      const selectedProject = projects[0];
+
+      if (selectedProject !== undefined) {
+        await this.ensureCanAccessProject(selectedProject, currentUser);
+      }
+    }
+
+    const projectUuids = projects.map((project) => project.uuid);
+    const projectNameByUuid = new Map(projects.map((project) => [project.uuid, project.name]));
+    const today = getTodayInLaPaz();
+    const humanItems =
+      query.resourceType === ResourcesReportTypeFilter.MATERIAL
+        ? []
+        : await this.getResourcesReportHumanItems(projectUuids, projectNameByUuid, dateRange);
+    const materialItems =
+      query.resourceType === ResourcesReportTypeFilter.HUMAN
+        ? []
+        : await this.getResourcesReportMaterialItems(projectUuids, projectNameByUuid, dateRange, today);
+    const items = [...humanItems, ...materialItems].sort(compareResourcesReportItems);
+
+    return {
+      datePolicy: 'Las fechas se exponen como YYYY-MM-DD sin conversion de zona horaria.',
+      today,
+      filters: {
+        projectUuid: query.projectUuid ?? null,
+        resourceType: query.resourceType,
+        month: query.month ?? null,
+        startDate: dateRange?.startDate ?? null,
+        endDate: dateRange?.endDate ?? null,
+      },
+      summary: {
+        totalHumanResources: new Set(humanItems.map((item) => item.user?.uuid)).size,
+        totalMaterialResources: new Set(materialItems.map((item) => item.resourceUuid)).size,
+        totalAssignedHours: humanItems
+          .reduce((sum, item) => sum + Number(item.assignedHours ?? '0'), 0)
+          .toFixed(2),
+        totalMaterialAssignmentDays: materialItems.reduce(
+          (sum, item) => sum + (item.assignedDays ?? 0),
+          0,
+        ),
+        activeMaterialAssignments: materialItems.filter(
+          (item) => item.temporalStatus === ResourceAssignmentTemporalStatus.ACTIVE,
+        ).length,
+      },
+      items,
     };
   }
 
@@ -418,12 +475,13 @@ export class ReportsService {
 
   private async getWorkloadForProjects(
     projectUuids: readonly string[],
+    dateRange?: ResourcesReportDateRange,
   ): Promise<WorkloadReportItemResponseDto[]> {
     if (projectUuids.length === 0) {
       return [];
     }
 
-    const rows = await this.taskAssignmentsRepository
+    const queryBuilder = this.taskAssignmentsRepository
       .createQueryBuilder('assignment')
       .innerJoin('assignment.task', 'task')
       .innerJoin('assignment.user', 'user')
@@ -435,7 +493,15 @@ export class ReportsService {
       .addSelect('user.role', 'user_role')
       .addSelect('COALESCE(SUM(assignment.assignedHours), 0)', 'assignedHours')
       .where('task.projectUuid IN (:...projectUuids)', { projectUuids })
-      .andWhere('task.deletedAt IS NULL')
+      .andWhere('task.deletedAt IS NULL');
+
+    if (dateRange !== undefined) {
+      queryBuilder
+        .andWhere('task.startDate <= :reportEndDate', { reportEndDate: dateRange.endDate })
+        .andWhere('task.endDate >= :reportStartDate', { reportStartDate: dateRange.startDate });
+    }
+
+    const rows = await queryBuilder
       .groupBy('task.projectUuid')
       .addGroupBy('assignment.userUuid')
       .addGroupBy('user.uuid')
@@ -464,6 +530,107 @@ export class ReportsService {
       },
       assignedHours: Number(row.assignedHours).toFixed(2),
     }));
+  }
+
+  private async getResourcesReportHumanItems(
+    projectUuids: readonly string[],
+    projectNameByUuid: ReadonlyMap<string, string>,
+    dateRange?: ResourcesReportDateRange,
+  ): Promise<ResourcesReportItemResponseDto[]> {
+    const workload = await this.getWorkloadForProjects(projectUuids, dateRange);
+
+    return workload.map((item) => ({
+      itemType: ResourcesReportItemType.HUMAN,
+      projectUuid: item.projectUuid,
+      projectName: projectNameByUuid.get(item.projectUuid) ?? 'Proyecto',
+      user: item.user,
+      resourceUuid: null,
+      resourceName: item.user.name,
+      resourceCode: null,
+      resourceCategory: null,
+      operationalStatus: null,
+      assignedHours: item.assignedHours,
+      assignedDays: null,
+      taskName: null,
+      startDate: dateRange?.startDate ?? null,
+      endDate: dateRange?.endDate ?? null,
+      temporalStatus: null,
+      currentAvailability: null,
+      authorizedNotes: null,
+    }));
+  }
+
+  private async getResourcesReportMaterialItems(
+    projectUuids: readonly string[],
+    projectNameByUuid: ReadonlyMap<string, string>,
+    dateRange: ResourcesReportDateRange | undefined,
+    today: string,
+  ): Promise<ResourcesReportItemResponseDto[]> {
+    const assignments = await this.findResourceUtilizationAssignments(projectUuids, dateRange);
+    const activeResourceUuids = await this.findCurrentlyAssignedResourceUuids(
+      assignments.map((assignment) => assignment.resourceUuid),
+      today,
+    );
+
+    return assignments.map((assignment) => {
+      const utilization = this.mapResourceUtilizationAssignment(
+        assignment,
+        today,
+        activeResourceUuids,
+      );
+
+      return {
+        itemType: ResourcesReportItemType.MATERIAL,
+        projectUuid: assignment.projectUuid,
+        projectName: projectNameByUuid.get(assignment.projectUuid) ?? assignment.project.name,
+        user: null,
+        resourceUuid: utilization.resourceUuid,
+        resourceName: utilization.resourceName,
+        resourceCode: utilization.resourceCode,
+        resourceCategory: utilization.resourceCategory,
+        operationalStatus: utilization.operationalStatus,
+        assignedHours: null,
+        assignedDays: utilization.assignedDays,
+        taskName: utilization.task?.name ?? null,
+        startDate: utilization.startDate,
+        endDate: utilization.endDate,
+        temporalStatus: utilization.temporalStatus,
+        currentAvailability: utilization.currentAvailability,
+        authorizedNotes: utilization.authorizedNotes,
+      };
+    });
+  }
+
+  private findResourceUtilizationAssignments(
+    projectUuids: readonly string[],
+    dateRange?: ResourcesReportDateRange,
+  ): Promise<ResourceAssignment[]> {
+    if (projectUuids.length === 0) {
+      return Promise.resolve([]);
+    }
+
+    const queryBuilder = this.resourceAssignmentsRepository
+      .createQueryBuilder('assignment')
+      .withDeleted()
+      .innerJoinAndSelect('assignment.resource', 'resource')
+      .innerJoinAndSelect('assignment.project', 'project')
+      .leftJoinAndSelect('assignment.task', 'task')
+      .where('assignment.projectUuid IN (:...projectUuids)', { projectUuids })
+      .andWhere('assignment.deletedAt IS NULL');
+
+    if (dateRange !== undefined) {
+      queryBuilder
+        .andWhere('assignment.startDate <= :reportEndDate', { reportEndDate: dateRange.endDate })
+        .andWhere('assignment.endDate >= :reportStartDate', {
+          reportStartDate: dateRange.startDate,
+        });
+    }
+
+    return queryBuilder
+      .orderBy('assignment.startDate', 'ASC')
+      .addOrderBy('assignment.endDate', 'ASC')
+      .addOrderBy('resource.code', 'ASC')
+      .getMany();
   }
 
   private async findCurrentlyAssignedResourceUuids(
@@ -713,9 +880,71 @@ function parseDateOnlyUtcNoon(value: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 }
 
+function resolveResourcesReportDateRange(
+  query: ResourcesReportQueryDto,
+): ResourcesReportDateRange | undefined {
+  if (query.month !== undefined) {
+    const [yearText, monthText] = query.month.split('-');
+    const year = Number.parseInt(yearText ?? '', 10);
+    const month = Number.parseInt(monthText ?? '', 10);
+
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('month debe contener un mes valido entre 01 y 12.');
+    }
+
+    const endDay = new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate();
+
+    return {
+      startDate: `${query.month}-01`,
+      endDate: `${query.month}-${endDay.toString().padStart(2, '0')}`,
+    };
+  }
+
+  if (query.startDate === undefined && query.endDate === undefined) {
+    return undefined;
+  }
+
+  if (query.startDate === undefined || query.endDate === undefined) {
+    throw new BadRequestException('startDate y endDate deben enviarse juntos.');
+  }
+
+  if (query.startDate > query.endDate) {
+    throw new BadRequestException('endDate debe ser mayor o igual a startDate.');
+  }
+
+  return {
+    startDate: query.startDate,
+    endDate: query.endDate,
+  };
+}
+
+function compareResourcesReportItems(
+  firstItem: ResourcesReportItemResponseDto,
+  secondItem: ResourcesReportItemResponseDto,
+): number {
+  const projectComparison = firstItem.projectName.localeCompare(secondItem.projectName);
+
+  if (projectComparison !== 0) {
+    return projectComparison;
+  }
+
+  const typeComparison = firstItem.itemType.localeCompare(secondItem.itemType);
+
+  if (typeComparison !== 0) {
+    return typeComparison;
+  }
+
+  return firstItem.resourceName.localeCompare(secondItem.resourceName);
+}
+
 interface FlattenedGanttTask {
   task: Task;
   level: number;
+}
+
+interface ResourcesReportDateRange {
+  startDate: string;
+  endDate: string;
 }
 
 interface DashboardResourceMetrics {

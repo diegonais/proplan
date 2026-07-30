@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { UserRole } from '../../common/enums/user-role.enum';
+import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { Project } from '../projects/entities/project.entity';
 import { TaskAssignment } from '../task-assignments/entities/task-assignment.entity';
@@ -47,6 +48,7 @@ export class ProjectMembersService {
   ): Promise<ProjectMemberResponseDto> {
     const project = await this.findActiveProjectOrFail(projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     const user = await this.usersRepository.findOne({
       where: { uuid: createProjectMemberDto.userUuid },
@@ -104,6 +106,7 @@ export class ProjectMembersService {
   ): Promise<ProjectMemberCandidateResponseDto[]> {
     const project = await this.findActiveProjectOrFail(projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     const members = await this.projectMembersRepository.find({
       where: { projectUuid: project.uuid },
@@ -122,6 +125,7 @@ export class ProjectMembersService {
   async remove(projectUuid: string, userUuid: string, currentUser: AuthenticatedUser): Promise<void> {
     const project = await this.findActiveProjectOrFail(projectUuid);
     this.ensureCanManageProject(project, currentUser);
+    this.ensureProjectCanBeModified(project);
 
     if (project.managerUuid === userUuid) {
       throw new BadRequestException('El jefe del proyecto debe permanecer como miembro.');
@@ -219,6 +223,12 @@ export class ProjectMembersService {
     }
 
     throw new ForbiddenException('No tiene permiso para gestionar miembros de este proyecto.');
+  }
+
+  private ensureProjectCanBeModified(project: Project): void {
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('No se puede modificar un proyecto finalizado.');
+    }
   }
 
   private async isProjectMember(projectUuid: string, userUuid: string): Promise<boolean> {
