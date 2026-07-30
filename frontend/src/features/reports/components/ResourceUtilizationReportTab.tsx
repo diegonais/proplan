@@ -193,7 +193,7 @@ export function ResourceUtilizationReportTab({
     <Stack spacing={3}>
       <Stack spacing={0.5}>
         <Typography component="h2" variant="h5">
-          Carga y utilizacion de recursos
+          Carga y utilización de recursos
         </Typography>
         <Typography color="text.secondary">
           Reporte general con filtros por periodo, proyecto y alcance de recursos.
@@ -345,7 +345,7 @@ export function ResourceUtilizationReportTab({
 
       {isLoading ? (
         <Stack alignItems="center" spacing={2} sx={{ py: 6 }}>
-          <CircularProgress aria-label="Cargando carga y utilizacion de recursos" />
+          <CircularProgress aria-label="Cargando carga y utilización de recursos" />
           <Typography color="text.secondary">Generando reporte</Typography>
         </Stack>
       ) : null}
@@ -457,7 +457,7 @@ function openPdfPreview(file: ProjectExportDownload): boolean {
 function ResourcesReportTable({ items }: { items: readonly ResourcesReportItem[] }) {
   return (
     <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-      <Table aria-label="Carga y utilizacion de recursos">
+      <Table aria-label="Carga y utilización de recursos">
         <TableHead>
           <TableRow>
             <TableCell>Tipo</TableCell>

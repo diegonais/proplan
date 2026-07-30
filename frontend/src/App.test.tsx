@@ -1546,7 +1546,7 @@ describe('Reports module', () => {
 
     expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Diagrama de Gantt/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Carga y utilizacion de recursos/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Carga y utilización de recursos/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Presupuesto vs costos reales/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Estado general/ })).toBeInTheDocument();
 
@@ -1578,10 +1578,10 @@ describe('Reports module', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Carga y utilizacion de recursos/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Carga y utilización de recursos/ }));
 
     expect(
-      await screen.findByRole('heading', { name: 'Carga y utilizacion de recursos' }),
+      await screen.findByRole('heading', { name: 'Carga y utilización de recursos' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generar reporte' })).toBeDisabled();
     expect(
@@ -1595,7 +1595,7 @@ describe('Reports module', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generar reporte' }));
 
-    expect(await screen.findByRole('table', { name: 'Carga y utilizacion de recursos' })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: 'Carga y utilización de recursos' })).toBeInTheDocument();
     expect(screen.getByText('Ana Choque')).toBeInTheDocument();
     expect(screen.getByText('LAP-LOG-001')).toBeInTheDocument();
     await waitFor(() => {

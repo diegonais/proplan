@@ -43,7 +43,7 @@ const reportOptions: readonly {
   },
   {
     type: 'resources',
-    label: 'Carga y utilizacion de recursos',
+    label: 'Carga y utilización de recursos',
     scope: 'General con filtros',
     icon: <GroupsOutlinedIcon />,
   },
