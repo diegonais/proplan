@@ -1,9 +1,13 @@
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  IconButton,
+  InputAdornment,
   Paper,
   Stack,
   TextField,
@@ -35,6 +39,7 @@ export function LoginPage() {
   const [formErrors, setFormErrors] = useState<LoginFormErrors>({});
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -137,7 +142,7 @@ export function LoginPage() {
               id="password"
               name="password"
               label="Contraseña"
-              type="password"
+              type={isPasswordVisible ? 'text' : 'password'}
               autoComplete="current-password"
               value={formState.password}
               onChange={(event) => {
@@ -146,7 +151,43 @@ export function LoginPage() {
               error={formErrors.password !== undefined}
               helperText={formErrors.password ?? 'Debe contener al menos 8 caracteres.'}
               disabled={isSubmitting}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{
+                inputLabel: { shrink: true },
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="Mantener presionado para ver contraseña"
+                        edge="end"
+                        type="button"
+                        disabled={isSubmitting}
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          setIsPasswordVisible(true);
+                        }}
+                        onPointerUp={() => {
+                          setIsPasswordVisible(false);
+                        }}
+                        onPointerCancel={() => {
+                          setIsPasswordVisible(false);
+                        }}
+                        onPointerLeave={() => {
+                          setIsPasswordVisible(false);
+                        }}
+                        onBlur={() => {
+                          setIsPasswordVisible(false);
+                        }}
+                      >
+                        {isPasswordVisible ? (
+                          <VisibilityOffOutlinedIcon />
+                        ) : (
+                          <VisibilityOutlinedIcon />
+                        )}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <Button
               type="submit"

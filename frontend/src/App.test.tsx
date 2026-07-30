@@ -69,6 +69,11 @@ const sampleTask = {
   status: 'PENDING',
   progress: 0,
   estimatedHours: '12.00',
+  mainResponsible: {
+    uuid: managedStandardUser.uuid,
+    name: managedStandardUser.name,
+    email: managedStandardUser.email,
+  },
   plannedBudget: '500.00',
   actualCost: '0.00',
   createdAt: '2026-07-24T18:30:00.000Z',
@@ -82,6 +87,7 @@ const sampleSubtask = {
   name: 'Subactividad validada',
   startDate: '2026-08-11',
   endDate: '2026-08-12',
+  mainResponsible: null,
 };
 
 const sampleResource = {
@@ -160,6 +166,23 @@ describe('App authentication flow', () => {
     expect(await screen.findByRole('heading', { name: 'Inicio de sesión' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
+  });
+
+  it('reveals the password only while the visibility button is pressed', async () => {
+    render(<App />);
+
+    const passwordInput = await screen.findByLabelText('Contraseña');
+    const visibilityButton = screen.getByLabelText('Mantener presionado para ver contraseña');
+
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    fireEvent.pointerDown(visibilityButton);
+
+    expect(passwordInput).toHaveAttribute('type', 'text');
+
+    fireEvent.pointerUp(visibilityButton);
+
+    expect(passwordInput).toHaveAttribute('type', 'password');
   });
 
   it('toggles the visual theme and keeps the preference', async () => {
@@ -1045,6 +1068,8 @@ describe('Project detail behavior', () => {
 
     expect(await screen.findByText('Actividad principal')).toBeInTheDocument();
     expect(screen.getByText('Subactividad validada')).toBeInTheDocument();
+    expect(screen.getByText(managedStandardUser.name)).toBeInTheDocument();
+    expect(screen.getByText(managedStandardUser.email)).toBeInTheDocument();
     expect(screen.getByText('2026-08-05 a 2026-08-10')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nueva actividad' })).toBeInTheDocument();
   });
@@ -1067,6 +1092,9 @@ describe('Project detail behavior', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Actividades' }));
+    expect(await screen.findByRole('heading', { name: 'Mis actividades' })).toBeInTheDocument();
+    expect(screen.getByText('Actividades asignadas a tu usuario dentro de este proyecto.')).toBeInTheDocument();
+    expect(screen.queryByText('Responsable')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByLabelText('Actualizar avance'));
     fireEvent.change(await screen.findByRole('spinbutton', { name: 'Progreso' }), {
       target: { value: '50' },

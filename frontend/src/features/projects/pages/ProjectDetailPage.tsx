@@ -292,7 +292,11 @@ export function ProjectDetailPage() {
             </Stack>
           ) : null}
           {selectedTab === 1 ? (
-            <ProjectTasksTab project={project} canManage={canModifyProject} />
+            <ProjectTasksTab
+              project={project}
+              canManage={canModifyProject}
+              isPersonalActivityView={user?.role === 'USER'}
+            />
           ) : null}
           {selectedTab === 2 && canViewOperationalTabs ? (
             <ProjectTeamTab project={project} canManage={canModifyProject} />

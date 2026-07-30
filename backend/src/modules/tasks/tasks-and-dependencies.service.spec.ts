@@ -206,6 +206,24 @@ describe('Tasks and task dependencies rules', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('includes the main responsible user when listing activities', async () => {
+    const task = await saveTask(tasksRepository, project.uuid);
+    const assignment = createTaskAssignment(task.uuid, regularUser.uuid, true);
+    task.assignments.push(assignment);
+    taskAssignmentsRepository.assignments.push(assignment);
+
+    await expect(tasksService.findAll(project.uuid, managerUser)).resolves.toMatchObject([
+      {
+        uuid: task.uuid,
+        mainResponsible: {
+          uuid: regularUser.uuid,
+          name: `Usuario ${UserRole.USER}`,
+          email: `${regularUser.uuid}@proplan.local`,
+        },
+      },
+    ]);
+  });
+
   it('soft deletes activities and rejects deletion with active subactivities', async () => {
     const parent = await saveTask(tasksRepository, project.uuid);
     const child = await saveTask(tasksRepository, project.uuid, { parentTaskUuid: parent.uuid });
@@ -526,13 +544,17 @@ function createTask(projectUuid: string, overrides: Partial<Task> = {}): Task {
   };
 }
 
-function createTaskAssignment(taskUuid: string, userUuid: string): TaskAssignment {
+function createTaskAssignment(
+  taskUuid: string,
+  userUuid: string,
+  isMainResponsible = false,
+): TaskAssignment {
   return {
     uuid: randomUUID(),
     taskUuid,
     userUuid,
     assignedHours: '0.00',
-    isMainResponsible: false,
+    isMainResponsible,
     task: createTask('', { uuid: taskUuid }),
     user: createUser(userUuid, UserRole.USER),
   };

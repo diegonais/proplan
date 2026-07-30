@@ -12,10 +12,17 @@ export interface Task {
   status: TaskStatus;
   progress: number;
   estimatedHours: string;
+  mainResponsible: TaskMainResponsible | null;
   plannedBudget: string | null;
   actualCost: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskMainResponsible {
+  uuid: string;
+  name: string;
+  email: string;
 }
 
 export interface TaskPayload {

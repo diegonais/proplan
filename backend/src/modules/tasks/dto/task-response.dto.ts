@@ -3,6 +3,17 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TaskStatus } from '../../../common/enums/task-status.enum';
 import { Task } from '../entities/task.entity';
 
+export class TaskMainResponsibleResponseDto {
+  @ApiProperty({ example: '6f1fbb9d-5cc8-4b20-a1b5-fb5d42f3a541' })
+  uuid!: string;
+
+  @ApiProperty({ example: 'Diego Usuario' })
+  name!: string;
+
+  @ApiProperty({ example: 'usuario@proplan.local' })
+  email!: string;
+}
+
 export class TaskResponseDto {
   @ApiProperty({ example: '0bdcfd5c-2ac3-43da-9bb6-28e8e8126eb1' })
   uuid!: string;
@@ -34,6 +45,13 @@ export class TaskResponseDto {
   @ApiProperty({ example: '24.00' })
   estimatedHours!: string;
 
+  @ApiPropertyOptional({
+    type: TaskMainResponsibleResponseDto,
+    nullable: true,
+    description: 'Responsable principal de la actividad cuando existe una asignacion marcada como principal.',
+  })
+  mainResponsible!: TaskMainResponsibleResponseDto | null;
+
   @ApiProperty({
     example: '1500.00',
     nullable: true,
@@ -57,6 +75,9 @@ export class TaskResponseDto {
   updatedAt!: string;
 
   static fromEntity(task: Task, includeFinancials = true): TaskResponseDto {
+    const assignments = Array.isArray(task.assignments) ? task.assignments : [];
+    const mainResponsible = assignments.find((assignment) => assignment.isMainResponsible);
+
     return {
       uuid: task.uuid,
       projectUuid: task.projectUuid,
@@ -68,6 +89,14 @@ export class TaskResponseDto {
       status: task.status,
       progress: task.progress,
       estimatedHours: task.estimatedHours,
+      mainResponsible:
+        mainResponsible === undefined
+          ? null
+          : {
+              uuid: mainResponsible.user.uuid,
+              name: mainResponsible.user.name,
+              email: mainResponsible.user.email,
+            },
       plannedBudget: includeFinancials ? task.plannedBudget : null,
       actualCost: includeFinancials ? task.actualCost : null,
       createdAt: task.createdAt.toISOString(),

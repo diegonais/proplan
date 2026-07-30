@@ -100,6 +100,7 @@ export class TasksService {
 
     const tasks = await this.tasksRepository.find({
       where: { projectUuid: project.uuid },
+      relations: { assignments: { user: true } },
       order: { startDate: 'ASC', endDate: 'ASC', name: 'ASC' },
     });
 
@@ -272,7 +273,10 @@ export class TasksService {
   }
 
   private async findActiveTaskOrFail(uuid: string): Promise<Task> {
-    const task = await this.tasksRepository.findOne({ where: { uuid } });
+    const task = await this.tasksRepository.findOne({
+      where: { uuid },
+      relations: { assignments: { user: true } },
+    });
 
     if (task === null) {
       throw new NotFoundException('Actividad no encontrada.');

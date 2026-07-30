@@ -46,6 +46,7 @@ import { TaskStatusChip } from './TaskStatusChip';
 interface ProjectTasksTabProps {
   project: Project;
   canManage: boolean;
+  isPersonalActivityView: boolean;
 }
 
 interface FlattenedTask {
@@ -53,7 +54,7 @@ interface FlattenedTask {
   level: number;
 }
 
-export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
+export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: ProjectTasksTabProps) {
   const { showNotification } = useNotifications();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,6 +94,8 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
   const isProjectCompleted = project.status === 'COMPLETED';
   const canManageTasks = canManage && !isProjectCompleted;
   const canUpdateOwnProgress = !canManage && !isProjectCompleted;
+  const showResponsibleColumn = !isPersonalActivityView;
+  const tableColumnCount = showResponsibleColumn ? 9 : 8;
 
   const handleSubmitTask = async (payload: TaskPayload) => {
     if (formState === null) {
@@ -161,10 +164,12 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
         <Box>
           <Typography component="h2" variant="h5">
-            Actividades
+            {isPersonalActivityView ? 'Mis actividades' : 'Actividades'}
           </Typography>
           <Typography color="text.secondary">
-            Planificacion padre-hijo y dependencias fin a inicio del proyecto.
+            {isPersonalActivityView
+              ? 'Actividades asignadas a tu usuario dentro de este proyecto.'
+              : 'Planificacion padre-hijo, responsable principal y dependencias fin a inicio del proyecto.'}
           </Typography>
         </Box>
         {canManageTasks ? (
@@ -190,10 +195,11 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
             <Typography color="text.secondary">Cargando actividades</Typography>
           </Stack>
         ) : (
-          <Table aria-label="Actividades del proyecto">
+          <Table aria-label={isPersonalActivityView ? 'Mis actividades asignadas' : 'Actividades del proyecto'}>
             <TableHead>
               <TableRow>
                 <TableCell>Actividad</TableCell>
+                {showResponsibleColumn ? <TableCell>Responsable</TableCell> : null}
                 <TableCell>Estado</TableCell>
                 <TableCell>Progreso</TableCell>
                 <TableCell>Fechas</TableCell>
@@ -206,10 +212,12 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
             <TableBody>
               {!hasTasks ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={tableColumnCount}>
                     <Box sx={{ py: 5, textAlign: 'center' }}>
                       <Typography color="text.secondary">
-                        Todavia no hay actividades registradas para este proyecto.
+                        {isPersonalActivityView
+                          ? 'No tienes actividades asignadas en este proyecto.'
+                          : 'Todavia no hay actividades registradas para este proyecto.'}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -235,6 +243,20 @@ export function ProjectTasksTab({ project, canManage }: ProjectTasksTabProps) {
                         </Box>
                       </Stack>
                     </TableCell>
+                    {showResponsibleColumn ? (
+                      <TableCell>
+                        {task.mainResponsible === null ? (
+                          <Typography color="text.secondary">Sin responsable principal</Typography>
+                        ) : (
+                          <Box>
+                            <Typography sx={{ fontWeight: 700 }}>{task.mainResponsible.name}</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {task.mainResponsible.email}
+                            </Typography>
+                          </Box>
+                        )}
+                      </TableCell>
+                    ) : null}
                     <TableCell>
                       <TaskStatusChip status={task.status} />
                     </TableCell>
