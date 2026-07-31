@@ -62,7 +62,7 @@ Reglas importantes:
 
 1. Abrir el modulo de proyectos.
 2. Revisar nombre, estado, fechas, jefe de proyecto y presupuesto si el rol lo permite.
-3. Crear proyecto con nombre, objetivo, fechas, estado, presupuesto aprobado y jefe de proyecto.
+3. Crear proyecto con nombre, objetivo, fechas, estado y jefe de proyecto. El presupuesto aprobado solo puede definirlo o modificarlo el Administrador.
 4. Editar datos generales cuando se tenga permiso.
 5. Eliminar proyecto de forma logica si corresponde.
 
@@ -161,6 +161,8 @@ Los jefes de proyecto y administradores pueden revisar:
 - Porcentaje consumido.
 
 El costo ejecutado del proyecto se calcula sumando el costo ejecutado de sus actividades activas no canceladas.
+El costo ejecutado de una actividad puede ser menor o igual a su presupuesto planificado, pero no puede superarlo.
+Solo el Administrador puede modificar el presupuesto aprobado del proyecto.
 
 ## Recursos
 

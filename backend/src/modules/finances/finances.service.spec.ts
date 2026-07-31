@@ -84,7 +84,7 @@ describe('FinancesService', () => {
   it('handles approvedBudget zero without invalid division', async () => {
     project.approvedBudget = '0.00';
     tasksRepository.tasks.push(
-      createTask(project.uuid, { plannedBudget: '0.00', actualCost: '10.00' }),
+      createTask(project.uuid, { plannedBudget: '10.00', actualCost: '10.00' }),
     );
 
     const summary = await service.getProjectFinancialSummary(project.uuid, adminUser);
@@ -96,7 +96,7 @@ describe('FinancesService', () => {
 
   it('marks the project as exceeded when actual cost is greater than the approved budget', async () => {
     tasksRepository.tasks.push(
-      createTask(project.uuid, { plannedBudget: '900.00', actualCost: '1200.01' }),
+      createTask(project.uuid, { plannedBudget: '1200.01', actualCost: '1200.01' }),
     );
 
     await expect(
@@ -143,7 +143,7 @@ describe('FinancesService', () => {
     tasksRepository.tasks.push(task);
 
     await expect(
-      service.updateProjectBudget(project.uuid, { approvedBudget: '2500.99' }, managerUser),
+      service.updateProjectBudget(project.uuid, { approvedBudget: '2500.99' }, adminUser),
     ).resolves.toMatchObject({
       approvedBudget: '2500.99',
     });
@@ -152,14 +152,20 @@ describe('FinancesService', () => {
         task.uuid,
         {
           plannedBudget: '700.10',
-          actualCost: '701.15',
+          actualCost: '700.10',
         },
         managerUser,
       ),
     ).resolves.toMatchObject({
       plannedBudget: '700.10',
-      actualCost: '701.15',
+      actualCost: '700.10',
     });
+  });
+
+  it('rejects project managers updating the approved project budget', async () => {
+    await expect(
+      service.updateProjectBudget(project.uuid, { approvedBudget: '2500.99' }, managerUser),
+    ).rejects.toThrow('Administrador');
   });
 
   it('rejects financial updates when the project is completed', async () => {
@@ -168,7 +174,7 @@ describe('FinancesService', () => {
     tasksRepository.tasks.push(task);
 
     await expect(
-      service.updateProjectBudget(project.uuid, { approvedBudget: '2500.99' }, managerUser),
+      service.updateProjectBudget(project.uuid, { approvedBudget: '2500.99' }, adminUser),
     ).rejects.toThrow('proyecto finalizado');
     await expect(
       service.updateTaskFinancials(task.uuid, { actualCost: '100.00' }, managerUser),
@@ -182,7 +188,7 @@ describe('FinancesService', () => {
     );
 
     await expect(
-      service.updateProjectBudget(project.uuid, { approvedBudget: '949.99' }, managerUser),
+      service.updateProjectBudget(project.uuid, { approvedBudget: '949.99' }, adminUser),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -193,6 +199,24 @@ describe('FinancesService', () => {
     await expect(
       service.updateTaskFinancials(task.uuid, { plannedBudget: '151.00' }, managerUser),
     ).rejects.toThrow('presupuesto aprobado');
+  });
+
+  it('rejects updating actual cost above the activity planned budget', async () => {
+    const task = createTask(project.uuid, { plannedBudget: '250.00', actualCost: '100.00' });
+    tasksRepository.tasks.push(task);
+
+    await expect(
+      service.updateTaskFinancials(task.uuid, { actualCost: '250.01' }, managerUser),
+    ).rejects.toThrow('presupuesto planificado');
+  });
+
+  it('rejects reducing planned budget below the existing actual cost', async () => {
+    const task = createTask(project.uuid, { plannedBudget: '250.00', actualCost: '200.00' });
+    tasksRepository.tasks.push(task);
+
+    await expect(
+      service.updateTaskFinancials(task.uuid, { plannedBudget: '199.99' }, managerUser),
+    ).rejects.toThrow('presupuesto planificado');
   });
 });
 

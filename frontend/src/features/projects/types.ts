@@ -43,7 +43,7 @@ export interface ProjectPayload {
   startDate: string;
   endDate: string;
   status: ProjectStatus;
-  approvedBudget: string;
+  approvedBudget?: string;
   managerUuid?: string;
 }
 

@@ -414,7 +414,9 @@ describe('App authentication flow', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Acceso no autorizado' }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -587,7 +589,9 @@ describe('Resources catalog flow', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Acceso no autorizado' }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Recursos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Nuevo recurso' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Editar')).not.toBeInTheDocument();
@@ -649,9 +653,7 @@ describe('Resources catalog flow', () => {
     expect(await screen.findByText('No disponible')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Consultar disponibilidad'));
 
-    expect(
-      await screen.findAllByText('El recurso no esta en estado operativo.'),
-    ).toHaveLength(2);
+    expect(await screen.findAllByText('El recurso no esta en estado operativo.')).toHaveLength(2);
   });
 
   it('consults availability and shows assignment conflicts from the backend', async () => {
@@ -743,7 +745,9 @@ describe('Resources catalog flow', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('No tiene permiso para consultar recursos.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No tiene permiso para consultar recursos.'),
+    ).toBeInTheDocument();
   });
 
   it('shows conflict errors when status updates are rejected', async () => {
@@ -794,7 +798,9 @@ describe('Resources catalog flow', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Acceso no autorizado' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Recursos')).not.toBeInTheDocument();
   });
 });
@@ -918,6 +924,7 @@ describe('Project management flow', () => {
 
     expect(await screen.findByRole('heading', { name: 'Crear proyecto' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Jefe de proyecto')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Presupuesto aprobado/)).not.toBeInTheDocument();
     await fillProjectForm();
     fireEvent.click(screen.getByRole('button', { name: 'Crear proyecto' }));
 
@@ -927,7 +934,8 @@ describe('Project management flow', () => {
           (requestEntry) =>
             requestEntry.method === 'POST' &&
             requestEntry.url === '/projects' &&
-            !('managerUuid' in readBody(requestEntry.body)),
+            !('managerUuid' in readBody(requestEntry.body)) &&
+            !('approvedBudget' in readBody(requestEntry.body)),
         ),
       ).toBe(true);
     });
@@ -956,7 +964,9 @@ describe('Project management flow', () => {
     expect(
       await screen.findByText('La fecha de fin no puede ser anterior a la fecha de inicio.'),
     ).toBeInTheDocument();
-    expect(getCapturedRequests().some((requestEntry) => requestEntry.method === 'POST')).toBe(false);
+    expect(getCapturedRequests().some((requestEntry) => requestEntry.method === 'POST')).toBe(
+      false,
+    );
   });
 
   it('confirms project deletion before calling the API', async () => {
@@ -984,7 +994,8 @@ describe('Project management flow', () => {
       expect(
         getCapturedRequests().some(
           (requestEntry) =>
-            requestEntry.method === 'DELETE' && requestEntry.url === `/projects/${sampleProject.uuid}`,
+            requestEntry.method === 'DELETE' &&
+            requestEntry.url === `/projects/${sampleProject.uuid}`,
         ),
       ).toBe(true);
     });
@@ -1090,9 +1101,12 @@ describe('Project detail behavior', () => {
     const activityDialog = await screen.findByRole('dialog', { name: 'Crear actividad' });
     expect(within(activityDialog).queryByLabelText('Actividad padre')).not.toBeInTheDocument();
     expect(
-      within(activityDialog).getByText(`Rango del proyecto: ${sampleProject.startDate} a ${sampleProject.endDate}.`),
+      within(activityDialog).getByText(
+        `Rango del proyecto: ${sampleProject.startDate} a ${sampleProject.endDate}.`,
+      ),
     ).toBeInTheDocument();
-    const activityDateInputs = activityDialog.querySelectorAll<HTMLInputElement>('input[type="date"]');
+    const activityDateInputs =
+      activityDialog.querySelectorAll<HTMLInputElement>('input[type="date"]');
     expect(activityDateInputs.item(0)).toHaveAttribute('min', sampleProject.startDate);
     expect(activityDateInputs.item(0)).toHaveAttribute('max', sampleProject.endDate);
     fireEvent.click(within(activityDialog).getByRole('button', { name: 'Cancelar' }));
@@ -1113,7 +1127,9 @@ describe('Project detail behavior', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Actividad principal' }));
 
     expect(
-      within(subactivityDialog).getByText(`Rango de la actividad padre: ${sampleTask.startDate} a ${sampleTask.endDate}.`),
+      within(subactivityDialog).getByText(
+        `Rango de la actividad padre: ${sampleTask.startDate} a ${sampleTask.endDate}.`,
+      ),
     ).toBeInTheDocument();
     const subactivityDateInputs =
       subactivityDialog.querySelectorAll<HTMLInputElement>('input[type="date"]');
@@ -1140,7 +1156,9 @@ describe('Project detail behavior', () => {
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Actividades' }));
     expect(await screen.findByRole('heading', { name: 'Mis actividades' })).toBeInTheDocument();
-    expect(screen.getByText('Actividades asignadas a tu usuario dentro de este proyecto.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Actividades asignadas a tu usuario dentro de este proyecto.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Responsable')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByLabelText('Actualizar avance'));
     fireEvent.change(await screen.findByRole('spinbutton', { name: 'Progreso' }), {
@@ -1197,7 +1215,9 @@ describe('Project detail behavior', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('No se puede modificar un proyecto finalizado.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No se puede modificar un proyecto finalizado.'),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
   });
 
@@ -1256,6 +1276,41 @@ describe('Project detail behavior', () => {
     expect(screen.getByRole('link', { name: 'Catalogo' })).toHaveAttribute('href', '/resources');
   });
 
+  it('prevents project managers from approving budget and validates executed cost against planned budget', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createProjectFinancialSummaryRoute(),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Presupuesto y costos' }));
+
+    expect(await screen.findByText('Actividad principal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar aprobado' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(`Editar presupuesto y costo de ${sampleTask.name}`));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Editar valores financieros' }),
+    );
+    fireEvent.change(dialog.getByLabelText(/Costo ejecutado/), {
+      target: { value: '500.01' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Guardar' }));
+
+    expect(
+      await screen.findByText('El costo ejecutado no puede superar el presupuesto planificado.'),
+    ).toBeInTheDocument();
+    expect(
+      getCapturedRequests().some(
+        (requestEntry) =>
+          requestEntry.method === 'PATCH' &&
+          requestEntry.url === `/tasks/${sampleTask.uuid}/financials`,
+      ),
+    ).toBe(false);
+  });
+
   it('creates a resource assignment for an activity as project manager', async () => {
     installHttpMock([
       createMeRoute(projectManagerUser),
@@ -1278,7 +1333,9 @@ describe('Project detail behavior', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
 
-    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }),
+    );
     fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
       target: { value: sampleTask.startDate },
     });
@@ -1344,7 +1401,8 @@ describe('Project detail behavior', () => {
           status: 409,
           data: {
             statusCode: 409,
-            message: 'El recurso ya tiene una asignacion que se superpone con las fechas solicitadas.',
+            message:
+              'El recurso ya tiene una asignacion que se superpone con las fechas solicitadas.',
             error: 'Conflict',
             timestamp: '2026-07-24T18:30:00.000Z',
             path: `/projects/${sampleProject.uuid}/resource-assignments`,
@@ -1358,7 +1416,9 @@ describe('Project detail behavior', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
 
-    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }),
+    );
     fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
       target: { value: sampleTask.startDate },
     });
@@ -1393,7 +1453,9 @@ describe('Project detail behavior', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
 
-    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }),
+    );
     fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
       target: { value: '2026-08-01' },
     });
@@ -1403,7 +1465,9 @@ describe('Project detail behavior', () => {
     selectMuiOption(dialog.getByRole('combobox', { name: 'Actividad' }), /Actividad principal/);
 
     expect(
-      await screen.findByText('Las fechas deben estar dentro del rango de la actividad seleccionada.'),
+      await screen.findByText(
+        'Las fechas deben estar dentro del rango de la actividad seleccionada.',
+      ),
     ).toBeInTheDocument();
     expect(dialog.getByRole('button', { name: 'Guardar' })).toBeDisabled();
   });
@@ -1438,7 +1502,9 @@ describe('Project detail behavior', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
     fireEvent.click(await screen.findByLabelText('Editar asignacion'));
 
-    const editDialog = within(await screen.findByRole('dialog', { name: 'Editar asignacion de recurso' }));
+    const editDialog = within(
+      await screen.findByRole('dialog', { name: 'Editar asignacion de recurso' }),
+    );
     fireEvent.change(editDialog.getByLabelText(/Fecha final/), {
       target: { value: '2026-08-09' },
     });
@@ -1480,10 +1546,7 @@ describe('Project detail behavior', () => {
   });
 
   it('shows only summary and assigned activities tabs for regular users', async () => {
-    installHttpMock([
-      createMeRoute(standardUser),
-      createProjectDetailRoute(),
-    ]);
+    installHttpMock([createMeRoute(standardUser), createProjectDetailRoute()]);
 
     render(<App />);
 
@@ -1530,7 +1593,9 @@ describe('Project detail behavior', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Recursos' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Nueva asignacion' }));
 
-    const dialog = within(await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Crear asignacion de recurso' }),
+    );
     fireEvent.change(dialog.getByLabelText(/Fecha inicial/), {
       target: { value: sampleTask.startDate },
     });
@@ -1595,8 +1660,12 @@ describe('Reports module', () => {
 
     expect(await screen.findByRole('heading', { name: 'Reportes' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Diagrama de Gantt/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Carga y utilización de recursos/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Presupuesto vs costos reales/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Carga y utilización de recursos/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Presupuesto vs costos reales/ }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Estado general/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Diagrama de Gantt/ }));
@@ -1605,7 +1674,9 @@ describe('Reports module', () => {
 
     expect(await screen.findByRole('heading', { name: 'Diagrama de Gantt' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Calendario del proyecto' })).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Detalle calendario de actividades' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('table', { name: 'Detalle calendario de actividades' }),
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(
         getCapturedRequests().some(
@@ -1635,7 +1706,8 @@ describe('Reports module', () => {
     expect(screen.getByRole('button', { name: 'Generar reporte' })).toBeDisabled();
     expect(
       getCapturedRequests().some(
-        (requestEntry) => requestEntry.method === 'GET' && requestEntry.url === '/reports/resources',
+        (requestEntry) =>
+          requestEntry.method === 'GET' && requestEntry.url === '/reports/resources',
       ),
     ).toBe(false);
 
@@ -1644,7 +1716,9 @@ describe('Reports module', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generar reporte' }));
 
-    expect(await screen.findByRole('table', { name: 'Carga y utilización de recursos' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('table', { name: 'Carga y utilización de recursos' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Ana Choque')).toBeInTheDocument();
     expect(screen.getByText('LAP-LOG-001')).toBeInTheDocument();
     await waitFor(() => {
@@ -1677,7 +1751,9 @@ describe('Reports module', () => {
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Proyecto' }));
     fireEvent.click(await screen.findByRole('option', { name: sampleProject.name }));
 
-    expect(await screen.findByRole('heading', { name: 'Estado general del proyecto' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Estado general del proyecto' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Semaforo del proyecto: Verde' })).toBeInTheDocument();
     expect(screen.getByText('Estado estable')).toBeInTheDocument();
     expect(screen.getByText('No existen actividades vencidas.')).toBeInTheDocument();
@@ -1685,13 +1761,13 @@ describe('Reports module', () => {
 
   it('blocks reports for regular users', async () => {
     window.history.pushState({}, '', `/reports?projectUuid=${sampleProject.uuid}`);
-    installHttpMock([
-      createMeRoute(standardUser),
-    ]);
+    installHttpMock([createMeRoute(standardUser)]);
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Acceso no autorizado' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Acceso no autorizado' }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Reportes' })).not.toBeInTheDocument();
   });
 
@@ -1709,9 +1785,7 @@ describe('Reports module', () => {
         value: () => undefined,
       });
     }
-    const createObjectUrl = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:proplan-export');
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:proplan-export');
     const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 
@@ -1741,7 +1815,9 @@ describe('Reports module', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Presupuesto vs costos reales/ }));
-    expect(await screen.findByRole('heading', { name: 'Presupuesto vs costos reales' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Presupuesto vs costos reales' }),
+    ).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Exportar PDF' }));
 
     await waitFor(() => {
@@ -1802,7 +1878,9 @@ describe('User administration flow', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Administracion de usuarios' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Administracion de usuarios' }),
+    ).toBeInTheDocument();
     expect(await screen.findByText('Ana Choque')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo usuario' }));
@@ -1970,6 +2048,39 @@ function createProjectDetailRoute(project: unknown = sampleProject) {
     response: {
       status: 200,
       data: project,
+    },
+  };
+}
+
+function createProjectFinancialSummaryRoute() {
+  return {
+    method: 'GET' as const,
+    url: `/projects/${sampleProject.uuid}/financial-summary`,
+    response: {
+      status: 200,
+      data: {
+        projectUuid: sampleProject.uuid,
+        approvedBudget: sampleProject.approvedBudget,
+        distributedBudget: sampleTask.plannedBudget,
+        totalActualCost: sampleTask.actualCost,
+        balance: '1500.00',
+        variance: '500.00',
+        consumedPercentage: '0.00',
+        distributedBudgetDifference: '-1000.00',
+        budgetExceeded: false,
+        operationalBudgetPolicy: 'Se excluyen actividades CANCELLED.',
+        tasks: [
+          {
+            uuid: sampleTask.uuid,
+            name: sampleTask.name,
+            status: sampleTask.status,
+            plannedBudget: sampleTask.plannedBudget,
+            actualCost: sampleTask.actualCost,
+            variance: sampleTask.plannedBudget,
+            consumedPercentage: '0.00',
+          },
+        ],
+      },
     },
   };
 }
@@ -2211,9 +2322,12 @@ async function fillProjectForm(overrides: Partial<Record<'startDate' | 'endDate'
   fireEvent.change(screen.getByLabelText(/Fecha de fin/), {
     target: { value: overrides.endDate ?? '2026-12-15' },
   });
-  fireEvent.change(screen.getByLabelText(/Presupuesto aprobado/), {
-    target: { value: '1500' },
-  });
+  const approvedBudgetField = screen.queryByLabelText(/Presupuesto aprobado/);
+  if (approvedBudgetField !== null) {
+    fireEvent.change(approvedBudgetField, {
+      target: { value: '1500' },
+    });
+  }
 }
 
 async function fillResourceForm() {

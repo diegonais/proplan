@@ -27,6 +27,7 @@ import { SyntheticEvent, useCallback, useEffect, useMemo, useState } from 'react
 import { useNotifications } from '../../../components/feedback/notificationsContext';
 import { getApiErrorMessage } from '../../../services/http/apiError';
 import {
+  compareMoney,
   formatMoney,
   formatPercentage,
   isValidMoneyInput,
@@ -34,21 +35,26 @@ import {
 } from '../../../utils/money';
 import { updateTaskFinancials } from '../../tasks/services/tasksApi';
 import { getTaskStatusLabel } from '../../tasks/types';
-import {
-  getProjectFinancialSummary,
-  updateProjectBudget,
-} from '../services/projectsApi';
+import { getProjectFinancialSummary, updateProjectBudget } from '../services/projectsApi';
 import { Project, ProjectFinancialSummary, ProjectFinancialTaskSummary } from '../types';
 
 interface ProjectBudgetTabProps {
   project: Project;
   canManage: boolean;
+  canManageApprovedBudget: boolean;
   onProjectUpdated: (project: Project) => void;
 }
 
-type FinancialFormErrors = Partial<Record<'approvedBudget' | 'plannedBudget' | 'actualCost', string>>;
+type FinancialFormErrors = Partial<
+  Record<'approvedBudget' | 'plannedBudget' | 'actualCost', string>
+>;
 
-export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: ProjectBudgetTabProps) {
+export function ProjectBudgetTab({
+  project,
+  canManage,
+  canManageApprovedBudget,
+  onProjectUpdated,
+}: ProjectBudgetTabProps) {
   const { showNotification } = useNotifications();
   const [summary, setSummary] = useState<ProjectFinancialSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,7 +124,10 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const updatedProject = await updateProjectBudget(project.uuid, normalizeMoneyInput(budgetValue));
+      const updatedProject = await updateProjectBudget(
+        project.uuid,
+        normalizeMoneyInput(budgetValue),
+      );
       onProjectUpdated(updatedProject);
       showNotification('Presupuesto aprobado actualizado correctamente.', 'success');
       setBudgetDialogOpen(false);
@@ -142,6 +151,14 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
       nextErrors.actualCost = 'Ingrese un costo valido con maximo 2 decimales.';
     }
 
+    if (
+      nextErrors.plannedBudget === undefined &&
+      nextErrors.actualCost === undefined &&
+      compareMoney(taskValues.actualCost, taskValues.plannedBudget) > 0
+    ) {
+      nextErrors.actualCost = 'El costo ejecutado no puede superar el presupuesto planificado.';
+    }
+
     setFormErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0 || taskToEdit === null) {
@@ -155,7 +172,10 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
         plannedBudget: normalizeMoneyInput(taskValues.plannedBudget),
         actualCost: normalizeMoneyInput(taskValues.actualCost),
       });
-      showNotification('Valores financieros de la actividad actualizados correctamente.', 'success');
+      showNotification(
+        'Valores financieros de la actividad actualizados correctamente.',
+        'success',
+      );
       setTaskToEdit(null);
       await loadSummary();
     } catch (requestError: unknown) {
@@ -187,7 +207,7 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
           </Typography>
           <Typography color="text.secondary">{summary.operationalBudgetPolicy}</Typography>
         </Box>
-        {canManage ? (
+        {canManageApprovedBudget ? (
           <Button
             variant="contained"
             startIcon={<EditOutlinedIcon />}
@@ -305,6 +325,7 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
             component="form"
             id="project-budget-form"
             spacing={2.5}
+            noValidate
             onSubmit={(event) => {
               void handleBudgetSubmit(event);
             }}
@@ -363,6 +384,7 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
             component="form"
             id="task-financials-form"
             spacing={2.5}
+            noValidate
             onSubmit={(event) => {
               void handleTaskSubmit(event);
             }}
@@ -396,7 +418,7 @@ export function ProjectBudgetTab({ project, canManage, onProjectUpdated }: Proje
               }}
               error={formErrors.actualCost !== undefined}
               helperText={formErrors.actualCost ?? 'Monto no negativo con maximo 2 decimales.'}
-              slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+              slotProps={{ htmlInput: { min: 0, max: taskValues.plannedBudget, step: '0.01' } }}
               required
             />
           </Stack>

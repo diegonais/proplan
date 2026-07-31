@@ -111,6 +111,7 @@ Restricciones:
 - `endDate >= startDate`.
 - `progress` entre 0 y 100.
 - Horas, presupuesto y costo no negativos.
+- `actualCost <= plannedBudget`.
 - `COMPLETED` exige progreso 100.
 - `projectUuid` referencia `projects.uuid`.
 - `parentTaskUuid` referencia `tasks.uuid`.

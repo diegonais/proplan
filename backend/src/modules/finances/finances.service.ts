@@ -13,8 +13,10 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
 import {
+  exceedsPlannedBudget,
   exceedsApprovedBudget,
   PROJECT_BUDGET_LIMIT_MESSAGE,
+  TASK_ACTUAL_COST_LIMIT_MESSAGE,
 } from '../../common/utils/project-budget';
 import { ProjectResponseDto } from '../projects/dto/project-response.dto';
 import { Project } from '../projects/entities/project.entity';
@@ -61,6 +63,7 @@ export class FinancesService {
     currentUser: AuthenticatedUser,
   ): Promise<ProjectResponseDto> {
     const project = await this.findActiveProjectOrFail(projectUuid);
+    this.ensureCanManageApprovedBudget(currentUser);
     this.ensureCanManageFinancials(project, currentUser);
     this.ensureProjectCanBeModified(project);
     const approvedBudget = normalizeMoney(updateProjectBudgetDto.approvedBudget);
@@ -94,19 +97,24 @@ export class FinancesService {
       updateTaskFinancialsDto.plannedBudget === undefined
         ? task.plannedBudget
         : normalizeMoney(updateTaskFinancialsDto.plannedBudget);
+    const nextActualCost =
+      updateTaskFinancialsDto.actualCost === undefined
+        ? task.actualCost
+        : normalizeMoney(updateTaskFinancialsDto.actualCost);
 
     await this.ensureProjectPlannedBudgetLimit(project, {
       uuid: task.uuid,
       plannedBudget: nextPlannedBudget,
       status: task.status,
     });
+    this.ensureActualCostWithinPlannedBudget(nextPlannedBudget, nextActualCost);
 
     if (updateTaskFinancialsDto.plannedBudget !== undefined) {
       task.plannedBudget = nextPlannedBudget;
     }
 
     if (updateTaskFinancialsDto.actualCost !== undefined) {
-      task.actualCost = normalizeMoney(updateTaskFinancialsDto.actualCost);
+      task.actualCost = nextActualCost;
     }
 
     const savedTask = await this.tasksRepository.save(task);
@@ -146,11 +154,21 @@ export class FinancesService {
       return;
     }
 
-    throw new ForbiddenException('No tiene permiso para consultar informacion financiera del proyecto.');
+    throw new ForbiddenException(
+      'No tiene permiso para consultar informacion financiera del proyecto.',
+    );
   }
 
   private ensureCanManageFinancials(project: Project, currentUser: AuthenticatedUser): void {
     this.ensureCanViewFinancials(project, currentUser);
+  }
+
+  private ensureCanManageApprovedBudget(currentUser: AuthenticatedUser): void {
+    if (currentUser.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Solamente el Administrador puede modificar el presupuesto aprobado.',
+      );
+    }
   }
 
   private ensureProjectCanBeModified(project: Project): void {
@@ -184,6 +202,12 @@ export class FinancesService {
 
     if (exceedsApprovedBudget(project.approvedBudget, plannedBudgets)) {
       throw new BadRequestException(PROJECT_BUDGET_LIMIT_MESSAGE);
+    }
+  }
+
+  private ensureActualCostWithinPlannedBudget(plannedBudget: string, actualCost: string): void {
+    if (exceedsPlannedBudget(plannedBudget, actualCost)) {
+      throw new BadRequestException(TASK_ACTUAL_COST_LIMIT_MESSAGE);
     }
   }
 

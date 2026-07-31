@@ -91,7 +91,7 @@ export function ProjectForm({
       startDate: values.startDate,
       endDate: values.endDate,
       status: values.status,
-      approvedBudget: normalizeMoneyInput(values.approvedBudget),
+      ...(isAdmin ? { approvedBudget: normalizeMoneyInput(values.approvedBudget) } : {}),
       ...(isAdmin ? { managerUuid: values.managerUuid } : {}),
     });
   };
@@ -189,18 +189,20 @@ export function ProjectForm({
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            label="Presupuesto aprobado"
-            type="number"
-            value={values.approvedBudget}
-            onChange={(event) => {
-              updateField('approvedBudget', event.target.value);
-            }}
-            error={errors.approvedBudget !== undefined}
-            helperText={errors.approvedBudget ?? 'Monto no negativo.'}
-            slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
-            required
-          />
+          {isAdmin ? (
+            <TextField
+              label="Presupuesto aprobado"
+              type="number"
+              value={values.approvedBudget}
+              onChange={(event) => {
+                updateField('approvedBudget', event.target.value);
+              }}
+              error={errors.approvedBudget !== undefined}
+              helperText={errors.approvedBudget ?? 'Monto no negativo.'}
+              slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+              required
+            />
+          ) : null}
         </Stack>
 
         {isAdmin ? (
@@ -214,7 +216,9 @@ export function ProjectForm({
             error={errors.managerUuid !== undefined}
             helperText={
               errors.managerUuid ??
-              (managerOptionsLoading ? 'Cargando jefes disponibles.' : 'Seleccione un usuario activo.')
+              (managerOptionsLoading
+                ? 'Cargando jefes disponibles.'
+                : 'Seleccione un usuario activo.')
             }
             required
             disabled={managerOptionsLoading}
@@ -228,7 +232,12 @@ export function ProjectForm({
         ) : null}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
-          <Button component={Link} to={mode === 'edit' && project !== undefined ? `/projects/${project.uuid}` : '/projects'}>
+          <Button
+            component={Link}
+            to={
+              mode === 'edit' && project !== undefined ? `/projects/${project.uuid}` : '/projects'
+            }
+          >
             Cancelar
           </Button>
           <Button
@@ -264,11 +273,15 @@ function validateProjectForm(values: ProjectFormValues, isAdmin: boolean): Proje
     errors.endDate = 'La fecha de fin es obligatoria.';
   }
 
-  if (values.startDate.length > 0 && values.endDate.length > 0 && values.endDate < values.startDate) {
+  if (
+    values.startDate.length > 0 &&
+    values.endDate.length > 0 &&
+    values.endDate < values.startDate
+  ) {
     errors.endDate = 'La fecha de fin no puede ser anterior a la fecha de inicio.';
   }
 
-  if (!isValidMoneyInput(values.approvedBudget)) {
+  if (isAdmin && !isValidMoneyInput(values.approvedBudget)) {
     errors.approvedBudget = 'Ingrese un presupuesto valido con maximo 2 decimales.';
   }
 

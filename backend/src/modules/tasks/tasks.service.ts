@@ -13,8 +13,10 @@ import { ProjectStatus } from '../../common/enums/project-status.enum';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { normalizeMoney } from '../../common/utils/decimal-money';
 import {
+  exceedsPlannedBudget,
   exceedsApprovedBudget,
   PROJECT_BUDGET_LIMIT_MESSAGE,
+  TASK_ACTUAL_COST_LIMIT_MESSAGE,
 } from '../../common/utils/project-budget';
 import { ProjectMember } from '../project-members/entities/project-member.entity';
 import { Project } from '../projects/entities/project.entity';
@@ -62,8 +64,12 @@ export class TasksService {
     );
     this.ensureTaskIsInsideProject(project, createTaskDto.startDate, createTaskDto.endDate);
 
-    const parentTask = await this.resolveParentTask(project.uuid, createTaskDto.parentTaskUuid ?? null);
+    const parentTask = await this.resolveParentTask(
+      project.uuid,
+      createTaskDto.parentTaskUuid ?? null,
+    );
     const plannedBudget = normalizeMoney(createTaskDto.plannedBudget ?? '0.00');
+    const actualCost = normalizeMoney(createTaskDto.actualCost ?? '0.00');
     const status = createTaskDto.status ?? TaskStatus.PENDING;
 
     if (parentTask !== null) {
@@ -75,6 +81,7 @@ export class TasksService {
       plannedBudget,
       status,
     });
+    this.ensureActualCostWithinPlannedBudget(plannedBudget, actualCost);
 
     const task = await this.tasksRepository.save(
       this.tasksRepository.create({
@@ -88,7 +95,7 @@ export class TasksService {
         progress: createTaskDto.progress ?? 0,
         estimatedHours: formatDecimal(createTaskDto.estimatedHours ?? 0),
         plannedBudget,
-        actualCost: normalizeMoney(createTaskDto.actualCost ?? '0.00'),
+        actualCost,
       }),
     );
 
@@ -141,8 +148,14 @@ export class TasksService {
       updateTaskDto.plannedBudget === undefined
         ? task.plannedBudget
         : normalizeMoney(updateTaskDto.plannedBudget);
+    const nextActualCost =
+      updateTaskDto.actualCost === undefined
+        ? task.actualCost
+        : normalizeMoney(updateTaskDto.actualCost);
     const nextParentTaskUuid =
-      updateTaskDto.parentTaskUuid === undefined ? task.parentTaskUuid : updateTaskDto.parentTaskUuid;
+      updateTaskDto.parentTaskUuid === undefined
+        ? task.parentTaskUuid
+        : updateTaskDto.parentTaskUuid;
 
     this.ensureDateRangeIsValid(nextStartDate, nextEndDate);
     this.ensureStatusAndProgressAreConsistent(nextStatus, nextProgress);
@@ -182,6 +195,7 @@ export class TasksService {
       plannedBudget: nextPlannedBudget,
       status: nextStatus,
     });
+    this.ensureActualCostWithinPlannedBudget(nextPlannedBudget, nextActualCost);
 
     if (updateTaskDto.name !== undefined) {
       task.name = updateTaskDto.name.trim();
@@ -216,7 +230,7 @@ export class TasksService {
     }
 
     if (updateTaskDto.actualCost !== undefined) {
-      task.actualCost = normalizeMoney(updateTaskDto.actualCost);
+      task.actualCost = nextActualCost;
     }
 
     if (updateTaskDto.parentTaskUuid !== undefined) {
@@ -298,7 +312,10 @@ export class TasksService {
     return task;
   }
 
-  private async resolveParentTask(projectUuid: string, parentTaskUuid: string | null): Promise<Task | null> {
+  private async resolveParentTask(
+    projectUuid: string,
+    parentTaskUuid: string | null,
+  ): Promise<Task | null> {
     if (parentTaskUuid === null) {
       return null;
     }
@@ -306,7 +323,9 @@ export class TasksService {
     const parentTask = await this.findActiveTaskOrFail(parentTaskUuid);
 
     if (parentTask.projectUuid !== projectUuid) {
-      throw new BadRequestException('La subactividad debe pertenecer al mismo proyecto que su actividad padre.');
+      throw new BadRequestException(
+        'La subactividad debe pertenecer al mismo proyecto que su actividad padre.',
+      );
     }
 
     return parentTask;
@@ -352,10 +371,7 @@ export class TasksService {
     throw new ForbiddenException('No tiene permiso para consultar esta actividad.');
   }
 
-  private ensureCanManageProject(
-    project: Project,
-    currentUser: AuthenticatedUser,
-  ): void {
+  private ensureCanManageProject(project: Project, currentUser: AuthenticatedUser): void {
     if (currentUser.role === UserRole.ADMIN) {
       return;
     }
@@ -423,7 +439,9 @@ export class TasksService {
 
   private ensureTaskIsInsideProject(project: Project, startDate: string, endDate: string): void {
     if (startDate < project.startDate || endDate > project.endDate) {
-      throw new BadRequestException('Las fechas de la actividad deben estar dentro del rango del proyecto.');
+      throw new BadRequestException(
+        'Las fechas de la actividad deben estar dentro del rango del proyecto.',
+      );
     }
   }
 
@@ -529,6 +547,12 @@ export class TasksService {
 
     if (exceedsApprovedBudget(project.approvedBudget, plannedBudgets)) {
       throw new BadRequestException(PROJECT_BUDGET_LIMIT_MESSAGE);
+    }
+  }
+
+  private ensureActualCostWithinPlannedBudget(plannedBudget: string, actualCost: string): void {
+    if (exceedsPlannedBudget(plannedBudget, actualCost)) {
+      throw new BadRequestException(TASK_ACTUAL_COST_LIMIT_MESSAGE);
     }
   }
 }

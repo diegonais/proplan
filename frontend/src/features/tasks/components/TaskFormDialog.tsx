@@ -12,14 +12,8 @@ import {
 } from '@mui/material';
 import { SyntheticEvent, useEffect, useMemo, useState } from 'react';
 
-import { isValidMoneyInput, normalizeMoneyInput } from '../../../utils/money';
-import {
-  Task,
-  TaskFormValues,
-  TaskPayload,
-  getTaskStatusLabel,
-  taskStatuses,
-} from '../types';
+import { compareMoney, isValidMoneyInput, normalizeMoneyInput } from '../../../utils/money';
+import { Task, TaskFormValues, TaskPayload, getTaskStatusLabel, taskStatuses } from '../types';
 
 interface DateRange {
   startDate: string;
@@ -80,13 +74,13 @@ export function TaskFormDialog({
         estimatedHours: task.estimatedHours,
         plannedBudget: task.plannedBudget ?? '0.00',
         actualCost: task.actualCost ?? '0.00',
-        parentTaskUuid: taskKind === 'subactivity' ? task.parentTaskUuid ?? '' : '',
+        parentTaskUuid: taskKind === 'subactivity' ? (task.parentTaskUuid ?? '') : '',
       };
     }
 
     return {
       ...emptyValues,
-      parentTaskUuid: taskKind === 'subactivity' ? parentTaskUuid ?? '' : '',
+      parentTaskUuid: taskKind === 'subactivity' ? (parentTaskUuid ?? '') : '',
     };
   }, [parentTaskUuid, task, taskKind]);
   const [values, setValues] = useState<TaskFormValues>(initialValues);
@@ -104,7 +98,7 @@ export function TaskFormDialog({
   );
   const selectedParentTask =
     taskKind === 'subactivity'
-      ? tasks.find((candidate) => candidate.uuid === values.parentTaskUuid) ?? null
+      ? (tasks.find((candidate) => candidate.uuid === values.parentTaskUuid) ?? null)
       : null;
   const allowedDateRange =
     taskKind === 'activity'
@@ -150,7 +144,14 @@ export function TaskFormDialog({
     <Dialog open={open} onClose={isSubmitting ? undefined : onCancel} fullWidth maxWidth="md">
       <DialogTitle>{getDialogTitle(mode, taskKind)}</DialogTitle>
       <DialogContent>
-        <Stack component="form" id="task-form" spacing={2.5} onSubmit={handleSubmit} sx={{ pt: 1 }}>
+        <Stack
+          component="form"
+          id="task-form"
+          spacing={2.5}
+          noValidate
+          onSubmit={handleSubmit}
+          sx={{ pt: 1 }}
+        >
           {submitError !== null ? <Alert severity="error">{submitError}</Alert> : null}
 
           <TextField
@@ -183,11 +184,15 @@ export function TaskFormDialog({
                 updateField('parentTaskUuid', event.target.value);
               }}
               error={errors.parentTaskUuid !== undefined}
-              helperText={errors.parentTaskUuid ?? 'Seleccione una actividad padre de primer nivel.'}
+              helperText={
+                errors.parentTaskUuid ?? 'Seleccione una actividad padre de primer nivel.'
+              }
               required
             >
               <MenuItem value="" disabled>
-                {parentOptions.length > 0 ? 'Seleccione una actividad padre' : 'Primero cree una actividad'}
+                {parentOptions.length > 0
+                  ? 'Seleccione una actividad padre'
+                  : 'Primero cree una actividad'}
               </MenuItem>
               {parentOptions.map((parentOption) => (
                 <MenuItem key={parentOption.uuid} value={parentOption.uuid}>
@@ -289,7 +294,7 @@ export function TaskFormDialog({
               }}
               error={errors.actualCost !== undefined}
               helperText={errors.actualCost ?? 'Monto no negativo.'}
-              slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+              slotProps={{ htmlInput: { min: 0, max: values.plannedBudget, step: '0.01' } }}
               required
             />
           </Stack>
@@ -336,7 +341,11 @@ function validateTaskForm(
     errors.endDate = 'La fecha final es obligatoria.';
   }
 
-  if (values.startDate.length > 0 && values.endDate.length > 0 && values.endDate < values.startDate) {
+  if (
+    values.startDate.length > 0 &&
+    values.endDate.length > 0 &&
+    values.endDate < values.startDate
+  ) {
     errors.endDate = 'La fecha final no puede ser anterior a la fecha inicial.';
   }
 
@@ -359,6 +368,14 @@ function validateTaskForm(
   validateNonNegativeNumber(values.estimatedHours, 'estimatedHours', errors);
   validateMoneyField(values.plannedBudget, 'plannedBudget', errors);
   validateMoneyField(values.actualCost, 'actualCost', errors);
+
+  if (
+    errors.plannedBudget === undefined &&
+    errors.actualCost === undefined &&
+    compareMoney(values.actualCost, values.plannedBudget) > 0
+  ) {
+    errors.actualCost = 'El costo ejecutado no puede superar el presupuesto planificado.';
+  }
 
   if (values.progress.length === 0 || Number.isNaN(Number(values.progress))) {
     errors.progress = 'Ingrese un progreso valido.';

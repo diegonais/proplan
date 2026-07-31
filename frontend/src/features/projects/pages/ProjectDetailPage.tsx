@@ -43,9 +43,9 @@ export function ProjectDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedTab, setSelectedTab] = useState(0);
-  const [activeResourceAssignmentsCount, setActiveResourceAssignmentsCount] = useState<number | null>(
-    null,
-  );
+  const [activeResourceAssignmentsCount, setActiveResourceAssignmentsCount] = useState<
+    number | null
+  >(null);
 
   const canManageProject =
     project !== null &&
@@ -53,6 +53,7 @@ export function ProjectDetailPage() {
       (user?.role === 'PROJECT_MANAGER' && project.managerUuid === user.uuid));
   const isProjectCompleted = project?.status === 'COMPLETED';
   const canModifyProject = canManageProject && !isProjectCompleted;
+  const canModifyApprovedBudget = user?.role === 'ADMIN' && !isProjectCompleted;
   const canViewOperationalTabs = canManageProject;
   const canAccessResourceCatalog = user?.role === 'ADMIN';
   const canViewReports = canManageProject;
@@ -184,7 +185,11 @@ export function ProjectDetailPage() {
           ) : null}
           {canModifyProject ? (
             <>
-              <Button component={Link} to={`/projects/${project.uuid}/edit`} startIcon={<EditOutlinedIcon />}>
+              <Button
+                component={Link}
+                to={`/projects/${project.uuid}/edit`}
+                startIcon={<EditOutlinedIcon />}
+              >
                 Editar
               </Button>
               <Button
@@ -204,7 +209,8 @@ export function ProjectDetailPage() {
 
       {isProjectCompleted ? (
         <Alert severity="info">
-          El proyecto esta finalizado. La informacion queda disponible para consulta, pero no se permiten acciones operativas.
+          El proyecto esta finalizado. La informacion queda disponible para consulta, pero no se
+          permiten acciones operativas.
         </Alert>
       ) : null}
 
@@ -226,7 +232,11 @@ export function ProjectDetailPage() {
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
           {selectedTab === 0 ? (
             <Stack spacing={2.5}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={2}
+                justifyContent="space-between"
+              >
                 <Stack spacing={0.5}>
                   <Typography variant="body2" color="text.secondary">
                     Estado
@@ -318,6 +328,7 @@ export function ProjectDetailPage() {
             <ProjectBudgetTab
               project={project}
               canManage={canModifyProject}
+              canManageApprovedBudget={canModifyApprovedBudget}
               onProjectUpdated={(updatedProject) => {
                 setProject(updatedProject);
               }}

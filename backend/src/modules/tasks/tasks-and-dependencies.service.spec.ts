@@ -189,9 +189,9 @@ describe('Tasks and task dependencies rules', () => {
     const task = await saveTask(tasksRepository, project.uuid);
     taskAssignmentsRepository.assignments.push(createTaskAssignment(task.uuid, regularUser.uuid));
 
-    await expect(
-      tasksService.create(project.uuid, createTaskInput(), managerUser),
-    ).rejects.toThrow('proyecto finalizado');
+    await expect(tasksService.create(project.uuid, createTaskInput(), managerUser)).rejects.toThrow(
+      'proyecto finalizado',
+    );
     await expect(
       tasksService.updateOwnProgress(
         task.uuid,
@@ -205,11 +205,7 @@ describe('Tasks and task dependencies rules', () => {
     await saveTask(tasksRepository, project.uuid, { plannedBudget: '900.00' });
 
     await expect(
-      tasksService.create(
-        project.uuid,
-        createTaskInput({ plannedBudget: '101.00' }),
-        managerUser,
-      ),
+      tasksService.create(project.uuid, createTaskInput({ plannedBudget: '101.00' }), managerUser),
     ).rejects.toThrow('presupuesto aprobado');
   });
 
@@ -220,6 +216,30 @@ describe('Tasks and task dependencies rules', () => {
     await expect(
       tasksService.update(task.uuid, { plannedBudget: '151.00' }, managerUser),
     ).rejects.toThrow('presupuesto aprobado');
+  });
+
+  it('rejects creating an activity with actual cost above planned budget', async () => {
+    await expect(
+      tasksService.create(
+        project.uuid,
+        createTaskInput({ plannedBudget: '100.00', actualCost: '100.01' }),
+        managerUser,
+      ),
+    ).rejects.toThrow('presupuesto planificado');
+  });
+
+  it('rejects updating an activity with actual cost above planned budget', async () => {
+    const task = await saveTask(tasksRepository, project.uuid, {
+      plannedBudget: '100.00',
+      actualCost: '80.00',
+    });
+
+    await expect(
+      tasksService.update(task.uuid, { actualCost: '100.01' }, managerUser),
+    ).rejects.toThrow('presupuesto planificado');
+    await expect(
+      tasksService.update(task.uuid, { plannedBudget: '79.99' }, managerUser),
+    ).rejects.toThrow('presupuesto planificado');
   });
 
   it('enforces project management permissions by role', async () => {

@@ -94,6 +94,7 @@ describe('ProjectsService', () => {
     const project = await service.create(createProjectInput(), managerUser);
 
     expect(project.managerUuid).toBe(managerUser.uuid);
+    expect(project.approvedBudget).toBe('0.00');
     expect(projectMembersRepository.members).toContainEqual(
       expect.objectContaining({
         projectUuid: project.uuid,
@@ -112,6 +113,18 @@ describe('ProjectsService', () => {
     await expect(
       service.create(createProjectInput({ managerUuid: otherManagerUser.uuid }), managerUser),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('prevents project managers from defining or updating the approved budget', async () => {
+    await expect(
+      service.create(createProjectInput({ approvedBudget: '1200.00' }), managerUser),
+    ).rejects.toThrow('Administrador');
+
+    const project = await service.create(createProjectInput(), managerUser);
+
+    await expect(
+      service.update(project.uuid, { approvedBudget: '1200.00' }, managerUser),
+    ).rejects.toThrow('Administrador');
   });
 
   it('rejects invalid date ranges', async () => {

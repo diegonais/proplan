@@ -25,6 +25,7 @@ import { TaskDependency } from '../../task-dependencies/entities/task-dependency
 @Check('CHK_tasks_estimated_hours_non_negative', '"estimatedHours" >= 0')
 @Check('CHK_tasks_planned_budget_non_negative', '"plannedBudget" >= 0')
 @Check('CHK_tasks_actual_cost_non_negative', '"actualCost" >= 0')
+@Check('CHK_tasks_actual_cost_within_planned_budget', '"actualCost" <= "plannedBudget"')
 @Check('CHK_tasks_completed_progress', '"status" <> \'COMPLETED\' OR "progress" = 100')
 @Index('IDX_tasks_project_uuid', ['projectUuid'])
 @Index('IDX_tasks_parent_task_uuid', ['parentTaskUuid'])

@@ -49,6 +49,7 @@ export class FinancesController {
   }
 
   @Patch('projects/:projectUuid/budget')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Actualizar solamente el presupuesto aprobado del proyecto.' })
   @ApiOkResponse({ type: ProjectResponseDto })
   @ApiBadRequestResponse({
@@ -60,15 +61,21 @@ export class FinancesController {
     @Body() updateProjectBudgetDto: UpdateProjectBudgetDto,
     @CurrentUser() currentUser: AuthenticatedUser,
   ): Promise<ProjectResponseDto> {
-    return this.financesService.updateProjectBudget(projectUuid, updateProjectBudgetDto, currentUser);
+    return this.financesService.updateProjectBudget(
+      projectUuid,
+      updateProjectBudgetDto,
+      currentUser,
+    );
   }
 
   @Patch('tasks/:taskUuid/financials')
-  @ApiOperation({ summary: 'Actualizar presupuesto planificado y costo ejecutado de una actividad.' })
+  @ApiOperation({
+    summary: 'Actualizar presupuesto planificado y costo ejecutado de una actividad.',
+  })
   @ApiOkResponse({ type: TaskResponseDto })
   @ApiBadRequestResponse({
     description:
-      'Montos invalidos, negativos, cuerpo vacio o presupuesto planificado superior al aprobado.',
+      'Montos invalidos, negativos, cuerpo vacio, presupuesto planificado superior al aprobado o costo ejecutado superior al planificado.',
   })
   @ApiNotFoundResponse({ description: 'Actividad no encontrada o eliminada.' })
   updateTaskFinancials(
@@ -76,6 +83,10 @@ export class FinancesController {
     @Body() updateTaskFinancialsDto: UpdateTaskFinancialsDto,
     @CurrentUser() currentUser: AuthenticatedUser,
   ): Promise<TaskResponseDto> {
-    return this.financesService.updateTaskFinancials(taskUuid, updateTaskFinancialsDto, currentUser);
+    return this.financesService.updateTaskFinancials(
+      taskUuid,
+      updateTaskFinancialsDto,
+      currentUser,
+    );
   }
 }

@@ -96,8 +96,8 @@ En interfaz se usa Actividad. En API y codigo se usa `Task`.
 | Metodo | Ruta | Roles | Descripcion |
 | --- | --- | --- | --- |
 | `GET` | `/projects/:projectUuid/financial-summary` | `ADMIN`, `PROJECT_MANAGER` | Resumen financiero. |
-| `PATCH` | `/projects/:projectUuid/budget` | `ADMIN`, `PROJECT_MANAGER` | Actualiza presupuesto aprobado. |
-| `PATCH` | `/tasks/:taskUuid/financials` | `ADMIN`, `PROJECT_MANAGER` | Actualiza presupuesto planificado y costo ejecutado. |
+| `PATCH` | `/projects/:projectUuid/budget` | `ADMIN` | Actualiza presupuesto aprobado. |
+| `PATCH` | `/tasks/:taskUuid/financials` | `ADMIN`, `PROJECT_MANAGER` | Actualiza presupuesto planificado y costo ejecutado, sin permitir que el costo supere el presupuesto planificado. |
 
 ## Recursos
 

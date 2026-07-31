@@ -48,9 +48,12 @@ export class ProjectsService {
   ): Promise<ProjectResponseDto> {
     this.ensureCanCreate(currentUser, createProjectDto);
     this.ensureDateRangeIsValid(createProjectDto.startDate, createProjectDto.endDate);
+    const approvedBudget = this.resolveApprovedBudgetForCreate(createProjectDto, currentUser);
 
     const managerUuid =
-      currentUser.role === UserRole.PROJECT_MANAGER ? currentUser.uuid : createProjectDto.managerUuid;
+      currentUser.role === UserRole.PROJECT_MANAGER
+        ? currentUser.uuid
+        : createProjectDto.managerUuid;
 
     if (managerUuid === undefined) {
       throw new BadRequestException('Debe seleccionar un jefe de proyecto.');
@@ -70,7 +73,7 @@ export class ProjectsService {
           startDate: createProjectDto.startDate,
           endDate: createProjectDto.endDate,
           status: createProjectDto.status ?? ProjectStatus.PLANNING,
-          approvedBudget: normalizeMoney(createProjectDto.approvedBudget ?? '0.00'),
+          approvedBudget,
           managerUuid,
         }),
       );
@@ -91,7 +94,9 @@ export class ProjectsService {
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedProjectsResponseDto> {
     if (query.managerUuid !== undefined && currentUser.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solamente el Administrador puede filtrar por jefe de proyecto.');
+      throw new ForbiddenException(
+        'Solamente el Administrador puede filtrar por jefe de proyecto.',
+      );
     }
 
     if (query.orderBy === ProjectSortField.APPROVED_BUDGET && currentUser.role === UserRole.USER) {
@@ -118,7 +123,9 @@ export class ProjectsService {
     }
 
     if (query.managerUuid !== undefined) {
-      queryBuilder.andWhere('project.managerUuid = :managerUuid', { managerUuid: query.managerUuid });
+      queryBuilder.andWhere('project.managerUuid = :managerUuid', {
+        managerUuid: query.managerUuid,
+      });
     }
 
     if (currentUser.role === UserRole.PROJECT_MANAGER) {
@@ -170,7 +177,15 @@ export class ProjectsService {
     this.ensureProjectCanBeModified(project);
 
     if (updateProjectDto.managerUuid !== undefined && currentUser.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solamente el Administrador puede reasignar el jefe de proyecto.');
+      throw new ForbiddenException(
+        'Solamente el Administrador puede reasignar el jefe de proyecto.',
+      );
+    }
+
+    if (updateProjectDto.approvedBudget !== undefined && currentUser.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Solamente el Administrador puede modificar el presupuesto aprobado.',
+      );
     }
 
     if (updateProjectDto.managerUuid !== undefined) {
@@ -250,9 +265,27 @@ export class ProjectsService {
       throw new ForbiddenException('El rol Usuario no puede crear proyectos.');
     }
 
-    if (currentUser.role === UserRole.PROJECT_MANAGER && createProjectDto.managerUuid !== undefined) {
+    if (
+      currentUser.role === UserRole.PROJECT_MANAGER &&
+      createProjectDto.managerUuid !== undefined
+    ) {
       throw new ForbiddenException('El Jefe de proyecto no puede asignar otro jefe al crear.');
     }
+  }
+
+  private resolveApprovedBudgetForCreate(
+    createProjectDto: CreateProjectDto,
+    currentUser: AuthenticatedUser,
+  ): string {
+    const approvedBudget = normalizeMoney(createProjectDto.approvedBudget ?? '0.00');
+
+    if (currentUser.role !== UserRole.ADMIN && approvedBudget !== '0.00') {
+      throw new ForbiddenException(
+        'Solamente el Administrador puede definir el presupuesto aprobado.',
+      );
+    }
+
+    return currentUser.role === UserRole.ADMIN ? approvedBudget : '0.00';
   }
 
   private async findValidManagerOrFail(uuid: string): Promise<User> {
@@ -267,7 +300,9 @@ export class ProjectsService {
     }
 
     if (!MANAGER_ROLES.includes(user.role as (typeof MANAGER_ROLES)[number])) {
-      throw new BadRequestException('El jefe de proyecto debe tener rol Administrador o Jefe de proyecto.');
+      throw new BadRequestException(
+        'El jefe de proyecto debe tener rol Administrador o Jefe de proyecto.',
+      );
     }
 
     return user;
@@ -295,7 +330,10 @@ export class ProjectsService {
       return;
     }
 
-    if (currentUser.role === UserRole.USER && (await this.isProjectMember(project.uuid, currentUser.uuid))) {
+    if (
+      currentUser.role === UserRole.USER &&
+      (await this.isProjectMember(project.uuid, currentUser.uuid))
+    ) {
       return;
     }
 
@@ -378,7 +416,9 @@ export class ProjectsService {
       where: { projectUuid },
       order: { startDate: 'ASC', endDate: 'ASC', name: 'ASC' },
     });
-    const taskOutsideRange = tasks.find((task) => task.startDate < startDate || task.endDate > endDate);
+    const taskOutsideRange = tasks.find(
+      (task) => task.startDate < startDate || task.endDate > endDate,
+    );
 
     if (taskOutsideRange !== undefined) {
       throw new BadRequestException(
