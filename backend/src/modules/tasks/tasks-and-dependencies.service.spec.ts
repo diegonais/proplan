@@ -139,13 +139,39 @@ describe('Tasks and task dependencies rules', () => {
     ).rejects.toThrow('actividad padre');
   });
 
-  it('rejects parent-child cycles', async () => {
+  it('rejects using a subactivity as parent', async () => {
     const parent = await saveTask(tasksRepository, project.uuid);
     const child = await saveTask(tasksRepository, project.uuid, { parentTaskUuid: parent.uuid });
 
     await expect(
-      tasksService.update(parent.uuid, { parentTaskUuid: child.uuid }, managerUser),
-    ).rejects.toThrow('ciclos');
+      tasksService.create(
+        project.uuid,
+        createTaskInput({
+          parentTaskUuid: child.uuid,
+          startDate: '2026-08-06',
+          endDate: '2026-08-08',
+        }),
+        managerUser,
+      ),
+    ).rejects.toThrow('dos niveles');
+  });
+
+  it('rejects converting a parent activity into a subactivity', async () => {
+    const parent = await saveTask(tasksRepository, project.uuid);
+    const otherParent = await saveTask(tasksRepository, project.uuid);
+
+    await expect(
+      tasksService.update(parent.uuid, { parentTaskUuid: otherParent.uuid }, managerUser),
+    ).rejects.toThrow('actividad padre no puede convertirse');
+  });
+
+  it('rejects converting a subactivity into a parent activity', async () => {
+    const parent = await saveTask(tasksRepository, project.uuid);
+    const child = await saveTask(tasksRepository, project.uuid, { parentTaskUuid: parent.uuid });
+
+    await expect(
+      tasksService.update(child.uuid, { parentTaskUuid: null }, managerUser),
+    ).rejects.toThrow('debe conservar una actividad padre');
   });
 
   it('rejects COMPLETED without progress 100', async () => {

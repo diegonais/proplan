@@ -67,6 +67,7 @@ export class TasksService {
     const status = createTaskDto.status ?? TaskStatus.PENDING;
 
     if (parentTask !== null) {
+      this.ensureParentTaskCanAcceptSubtasks(parentTask);
       this.ensureTaskIsInsideParent(parentTask, createTaskDto.startDate, createTaskDto.endDate);
     }
 
@@ -151,9 +152,21 @@ export class TasksService {
       throw new BadRequestException('Una actividad no puede ser su propio padre.');
     }
 
+    const currentIsSubtask = task.parentTaskUuid !== null;
+    const nextIsSubtask = nextParentTaskUuid !== null;
+
+    if (!currentIsSubtask && nextIsSubtask) {
+      throw new BadRequestException('Una actividad padre no puede convertirse en subactividad.');
+    }
+
+    if (currentIsSubtask && !nextIsSubtask) {
+      throw new BadRequestException('Una subactividad debe conservar una actividad padre.');
+    }
+
     const parentTask = await this.resolveParentTask(project.uuid, nextParentTaskUuid ?? null);
 
     if (parentTask !== null) {
+      this.ensureParentTaskCanAcceptSubtasks(parentTask);
       this.ensureTaskIsInsideParent(parentTask, nextStartDate, nextEndDate);
       await this.ensureNoParentCycle(task.uuid, parentTask.uuid);
     }
@@ -418,6 +431,14 @@ export class TasksService {
     if (startDate < parentTask.startDate || endDate > parentTask.endDate) {
       throw new BadRequestException(
         'Las fechas de la subactividad deben estar dentro del rango de su actividad padre.',
+      );
+    }
+  }
+
+  private ensureParentTaskCanAcceptSubtasks(parentTask: Task): void {
+    if (parentTask.parentTaskUuid !== null) {
+      throw new BadRequestException(
+        'Una subactividad no puede ser actividad padre. Solo se permiten dos niveles: actividades y subactividades.',
       );
     }
   }

@@ -95,7 +95,8 @@ export class CreateTaskDto {
 
   @ApiPropertyOptional({
     example: '0bdcfd5c-2ac3-43da-9bb6-28e8e8126eb1',
-    description: 'UUID de la actividad padre cuando se crea una subactividad.',
+    description:
+      'UUID de una actividad padre de primer nivel cuando se crea una subactividad. No se permiten mas de dos niveles.',
   })
   @IsOptional()
   @IsUUID()

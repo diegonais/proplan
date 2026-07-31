@@ -1071,7 +1071,54 @@ describe('Project detail behavior', () => {
     expect(screen.getByText(managedStandardUser.name)).toBeInTheDocument();
     expect(screen.getByText(managedStandardUser.email)).toBeInTheDocument();
     expect(screen.getByText('2026-08-05 a 2026-08-10')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Nueva actividad' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Crear actividad' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Crear subactividad' })).toBeInTheDocument();
+  });
+
+  it('separates activity and subactivity creation forms', async () => {
+    installHttpMock([
+      createMeRoute(projectManagerUser),
+      createProjectDetailRoute(),
+      createTasksRoute([sampleTask, sampleSubtask]),
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Actividades' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear actividad' }));
+    const activityDialog = await screen.findByRole('dialog', { name: 'Crear actividad' });
+    expect(within(activityDialog).queryByLabelText('Actividad padre')).not.toBeInTheDocument();
+    expect(
+      within(activityDialog).getByText(`Rango del proyecto: ${sampleProject.startDate} a ${sampleProject.endDate}.`),
+    ).toBeInTheDocument();
+    const activityDateInputs = activityDialog.querySelectorAll<HTMLInputElement>('input[type="date"]');
+    expect(activityDateInputs.item(0)).toHaveAttribute('min', sampleProject.startDate);
+    expect(activityDateInputs.item(0)).toHaveAttribute('max', sampleProject.endDate);
+    fireEvent.click(within(activityDialog).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Crear actividad' })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear subactividad' }));
+    const subactivityDialog = await screen.findByRole('dialog', { name: 'Crear subactividad' });
+    const parentCombobox = within(subactivityDialog).getByRole('combobox', {
+      name: 'Actividad padre',
+    });
+
+    fireEvent.mouseDown(parentCombobox);
+
+    expect(await screen.findByRole('option', { name: 'Actividad principal' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Subactividad validada' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'Actividad principal' }));
+
+    expect(
+      within(subactivityDialog).getByText(`Rango de la actividad padre: ${sampleTask.startDate} a ${sampleTask.endDate}.`),
+    ).toBeInTheDocument();
+    const subactivityDateInputs =
+      subactivityDialog.querySelectorAll<HTMLInputElement>('input[type="date"]');
+    expect(subactivityDateInputs.item(0)).toHaveAttribute('min', sampleTask.startDate);
+    expect(subactivityDateInputs.item(1)).toHaveAttribute('max', sampleTask.endDate);
   });
 
   it('lets regular users update progress but hides management actions', async () => {
@@ -1111,7 +1158,8 @@ describe('Project detail behavior', () => {
         ),
       ).toBe(true);
     });
-    expect(screen.queryByRole('button', { name: 'Nueva actividad' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear actividad' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear subactividad' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Eliminar actividad')).not.toBeInTheDocument();
   });
 
@@ -1133,7 +1181,8 @@ describe('Project detail behavior', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Actividades' }));
 
     expect(await screen.findByText('Actividad principal')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Nueva actividad' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear actividad' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear subactividad' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Actualizar avance')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Editar actividad')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Eliminar actividad')).not.toBeInTheDocument();

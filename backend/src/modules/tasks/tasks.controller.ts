@@ -48,7 +48,7 @@ export class TasksController {
 
   @Post('projects/:projectUuid/tasks')
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
-  @ApiOperation({ summary: 'Crear una actividad o subactividad dentro de un proyecto.' })
+  @ApiOperation({ summary: 'Crear una actividad o subactividad de maximo dos niveles dentro de un proyecto.' })
   @ApiCreatedResponse({ type: TaskResponseDto })
   @ApiBadRequestResponse({
     description:
@@ -85,7 +85,7 @@ export class TasksController {
 
   @Patch('tasks/:uuid')
   @Roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER)
-  @ApiOperation({ summary: 'Actualizar una actividad autorizada.' })
+  @ApiOperation({ summary: 'Actualizar una actividad autorizada manteniendo la jerarquia de dos niveles.' })
   @ApiOkResponse({ type: TaskResponseDto })
   @ApiBadRequestResponse({
     description:

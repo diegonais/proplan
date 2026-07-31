@@ -63,6 +63,7 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [formState, setFormState] = useState<{
     mode: 'create' | 'edit';
+    taskKind: 'activity' | 'subactivity';
     task: Task | null;
     parentTaskUuid: string | null;
   } | null>(null);
@@ -91,6 +92,7 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
 
   const flattenedTasks = useMemo(() => flattenTasks(tasks), [tasks]);
   const hasTasks = tasks.length > 0;
+  const hasParentTasks = tasks.some((task) => task.parentTaskUuid === null);
   const isProjectCompleted = project.status === 'COMPLETED';
   const canManageTasks = canManage && !isProjectCompleted;
   const canUpdateOwnProgress = !canManage && !isProjectCompleted;
@@ -107,10 +109,20 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
     try {
       if (formState.mode === 'create') {
         await createTask(project.uuid, payload);
-        showNotification('Actividad creada correctamente.', 'success');
+        showNotification(
+          formState.taskKind === 'activity'
+            ? 'Actividad creada correctamente.'
+            : 'Subactividad creada correctamente.',
+          'success',
+        );
       } else if (formState.task !== null) {
         await updateTask(formState.task.uuid, payload);
-        showNotification('Actividad actualizada correctamente.', 'success');
+        showNotification(
+          formState.taskKind === 'activity'
+            ? 'Actividad actualizada correctamente.'
+            : 'Subactividad actualizada correctamente.',
+          'success',
+        );
       }
 
       setFormState(null);
@@ -173,16 +185,39 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
           </Typography>
         </Box>
         {canManageTasks ? (
-          <Button
-            variant="contained"
-            startIcon={<AddOutlinedIcon />}
-            onClick={() => {
-              setSubmitError(null);
-              setFormState({ mode: 'create', task: null, parentTaskUuid: null });
-            }}
-          >
-            Nueva actividad
-          </Button>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <Button
+              variant="contained"
+              startIcon={<AddOutlinedIcon />}
+              onClick={() => {
+                setSubmitError(null);
+                setFormState({
+                  mode: 'create',
+                  taskKind: 'activity',
+                  task: null,
+                  parentTaskUuid: null,
+                });
+              }}
+            >
+              Crear actividad
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<AccountTreeOutlinedIcon />}
+              disabled={!hasParentTasks}
+              onClick={() => {
+                setSubmitError(null);
+                setFormState({
+                  mode: 'create',
+                  taskKind: 'subactivity',
+                  task: null,
+                  parentTaskUuid: null,
+                });
+              }}
+            >
+              Crear subactividad
+            </Button>
+          </Stack>
         ) : null}
       </Stack>
 
@@ -311,27 +346,17 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
                       </Tooltip>
                       {canManageTasks ? (
                         <>
-                          <Tooltip title="Crear subactividad">
-                            <IconButton
-                              aria-label="Crear subactividad"
-                              onClick={() => {
-                                setSubmitError(null);
-                                setFormState({
-                                  mode: 'create',
-                                  task: null,
-                                  parentTaskUuid: task.uuid,
-                                });
-                              }}
-                            >
-                              <AddOutlinedIcon />
-                            </IconButton>
-                          </Tooltip>
                           <Tooltip title="Editar">
                             <IconButton
                               aria-label="Editar actividad"
                               onClick={() => {
                                 setSubmitError(null);
-                                setFormState({ mode: 'edit', task, parentTaskUuid: task.parentTaskUuid });
+                                setFormState({
+                                  mode: 'edit',
+                                  taskKind: task.parentTaskUuid === null ? 'activity' : 'subactivity',
+                                  task,
+                                  parentTaskUuid: task.parentTaskUuid,
+                                });
                               }}
                             >
                               <EditOutlinedIcon />
@@ -362,6 +387,8 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
       <TaskFormDialog
         open={formState !== null}
         mode={formState?.mode ?? 'create'}
+        taskKind={formState?.taskKind ?? 'activity'}
+        projectDateRange={{ startDate: project.startDate, endDate: project.endDate }}
         tasks={tasks}
         task={formState?.task}
         parentTaskUuid={formState?.parentTaskUuid}

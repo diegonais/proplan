@@ -21,9 +21,16 @@ import {
   taskStatuses,
 } from '../types';
 
+interface DateRange {
+  startDate: string;
+  endDate: string;
+}
+
 interface TaskFormDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
+  taskKind: 'activity' | 'subactivity';
+  projectDateRange: DateRange;
   tasks: readonly Task[];
   task?: Task | null;
   parentTaskUuid?: string | null;
@@ -51,6 +58,8 @@ const emptyValues: TaskFormValues = {
 export function TaskFormDialog({
   open,
   mode,
+  taskKind,
+  projectDateRange,
   tasks,
   task,
   parentTaskUuid,
@@ -71,15 +80,15 @@ export function TaskFormDialog({
         estimatedHours: task.estimatedHours,
         plannedBudget: task.plannedBudget ?? '0.00',
         actualCost: task.actualCost ?? '0.00',
-        parentTaskUuid: task.parentTaskUuid ?? '',
+        parentTaskUuid: taskKind === 'subactivity' ? task.parentTaskUuid ?? '' : '',
       };
     }
 
     return {
       ...emptyValues,
-      parentTaskUuid: parentTaskUuid ?? '',
+      parentTaskUuid: taskKind === 'subactivity' ? parentTaskUuid ?? '' : '',
     };
-  }, [parentTaskUuid, task]);
+  }, [parentTaskUuid, task, taskKind]);
   const [values, setValues] = useState<TaskFormValues>(initialValues);
   const [errors, setErrors] = useState<TaskFormErrors>({});
 
@@ -90,13 +99,22 @@ export function TaskFormDialog({
     }
   }, [initialValues, open]);
 
-  const unavailableParentUuids = useMemo(
-    () => (task === undefined || task === null ? new Set<string>() : collectDescendantUuids(tasks, task.uuid)),
-    [task, tasks],
-  );
   const parentOptions = tasks.filter(
-    (candidate) => candidate.uuid !== task?.uuid && !unavailableParentUuids.has(candidate.uuid),
+    (candidate) => candidate.parentTaskUuid === null && candidate.uuid !== task?.uuid,
   );
+  const selectedParentTask =
+    taskKind === 'subactivity'
+      ? tasks.find((candidate) => candidate.uuid === values.parentTaskUuid) ?? null
+      : null;
+  const allowedDateRange =
+    taskKind === 'activity'
+      ? projectDateRange
+      : selectedParentTask === null
+        ? null
+        : {
+            startDate: selectedParentTask.startDate,
+            endDate: selectedParentTask.endDate,
+          };
 
   const updateField = (field: keyof TaskFormValues, value: string) => {
     setValues((currentValues) => ({
@@ -107,7 +125,7 @@ export function TaskFormDialog({
 
   const handleSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextErrors = validateTaskForm(values);
+    const nextErrors = validateTaskForm(values, taskKind, allowedDateRange);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -124,13 +142,13 @@ export function TaskFormDialog({
       estimatedHours: Number(values.estimatedHours),
       plannedBudget: normalizeMoneyInput(values.plannedBudget),
       actualCost: normalizeMoneyInput(values.actualCost),
-      parentTaskUuid: values.parentTaskUuid.length > 0 ? values.parentTaskUuid : null,
+      parentTaskUuid: taskKind === 'subactivity' ? values.parentTaskUuid : null,
     });
   };
 
   return (
     <Dialog open={open} onClose={isSubmitting ? undefined : onCancel} fullWidth maxWidth="md">
-      <DialogTitle>{mode === 'create' ? 'Crear actividad' : 'Editar actividad'}</DialogTitle>
+      <DialogTitle>{getDialogTitle(mode, taskKind)}</DialogTitle>
       <DialogContent>
         <Stack component="form" id="task-form" spacing={2.5} onSubmit={handleSubmit} sx={{ pt: 1 }}>
           {submitError !== null ? <Alert severity="error">{submitError}</Alert> : null}
@@ -156,22 +174,30 @@ export function TaskFormDialog({
             minRows={2}
           />
 
-          <TextField
-            label="Actividad padre"
-            select
-            value={values.parentTaskUuid}
-            onChange={(event) => {
-              updateField('parentTaskUuid', event.target.value);
-            }}
-            helperText="Seleccione una actividad padre solo cuando registre una subactividad."
-          >
-            <MenuItem value="">Sin actividad padre</MenuItem>
-            {parentOptions.map((parentOption) => (
-              <MenuItem key={parentOption.uuid} value={parentOption.uuid}>
-                {parentOption.name}
+          {taskKind === 'subactivity' ? (
+            <TextField
+              label="Actividad padre"
+              select
+              value={values.parentTaskUuid}
+              onChange={(event) => {
+                updateField('parentTaskUuid', event.target.value);
+              }}
+              error={errors.parentTaskUuid !== undefined}
+              helperText={errors.parentTaskUuid ?? 'Seleccione una actividad padre de primer nivel.'}
+              required
+            >
+              <MenuItem value="" disabled>
+                {parentOptions.length > 0 ? 'Seleccione una actividad padre' : 'Primero cree una actividad'}
               </MenuItem>
-            ))}
-          </TextField>
+              {parentOptions.map((parentOption) => (
+                <MenuItem key={parentOption.uuid} value={parentOption.uuid}>
+                  {parentOption.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null}
+
+          <Alert severity="info">{getDateRangeMessage(taskKind, allowedDateRange)}</Alert>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
@@ -183,7 +209,7 @@ export function TaskFormDialog({
               }}
               error={errors.startDate !== undefined}
               helperText={errors.startDate}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={getDateInputSlotProps(allowedDateRange)}
               required
             />
             <TextField
@@ -195,7 +221,7 @@ export function TaskFormDialog({
               }}
               error={errors.endDate !== undefined}
               helperText={errors.endDate}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={getDateInputSlotProps(allowedDateRange)}
               required
             />
           </Stack>
@@ -287,11 +313,19 @@ export function TaskFormDialog({
   );
 }
 
-function validateTaskForm(values: TaskFormValues): TaskFormErrors {
+function validateTaskForm(
+  values: TaskFormValues,
+  taskKind: 'activity' | 'subactivity',
+  allowedDateRange: DateRange | null,
+): TaskFormErrors {
   const errors: TaskFormErrors = {};
 
   if (values.name.trim().length === 0) {
     errors.name = 'El nombre es obligatorio.';
+  }
+
+  if (taskKind === 'subactivity' && values.parentTaskUuid.length === 0) {
+    errors.parentTaskUuid = 'Seleccione una actividad padre.';
   }
 
   if (values.startDate.length === 0) {
@@ -304,6 +338,22 @@ function validateTaskForm(values: TaskFormValues): TaskFormErrors {
 
   if (values.startDate.length > 0 && values.endDate.length > 0 && values.endDate < values.startDate) {
     errors.endDate = 'La fecha final no puede ser anterior a la fecha inicial.';
+  }
+
+  if (allowedDateRange !== null) {
+    if (
+      values.startDate.length > 0 &&
+      (values.startDate < allowedDateRange.startDate || values.startDate > allowedDateRange.endDate)
+    ) {
+      errors.startDate = `La fecha inicial debe estar entre ${allowedDateRange.startDate} y ${allowedDateRange.endDate}.`;
+    }
+
+    if (
+      values.endDate.length > 0 &&
+      (values.endDate < allowedDateRange.startDate || values.endDate > allowedDateRange.endDate)
+    ) {
+      errors.endDate = `La fecha final debe estar entre ${allowedDateRange.startDate} y ${allowedDateRange.endDate}.`;
+    }
   }
 
   validateNonNegativeNumber(values.estimatedHours, 'estimatedHours', errors);
@@ -321,6 +371,40 @@ function validateTaskForm(values: TaskFormValues): TaskFormErrors {
   }
 
   return errors;
+}
+
+function getDialogTitle(mode: 'create' | 'edit', taskKind: 'activity' | 'subactivity'): string {
+  if (mode === 'create') {
+    return taskKind === 'activity' ? 'Crear actividad' : 'Crear subactividad';
+  }
+
+  return taskKind === 'activity' ? 'Editar actividad' : 'Editar subactividad';
+}
+
+function getDateRangeMessage(
+  taskKind: 'activity' | 'subactivity',
+  allowedDateRange: DateRange | null,
+): string {
+  if (allowedDateRange === null) {
+    return 'Seleccione una actividad padre para consultar el rango de fechas permitido.';
+  }
+
+  const subject = taskKind === 'activity' ? 'Rango del proyecto' : 'Rango de la actividad padre';
+
+  return `${subject}: ${allowedDateRange.startDate} a ${allowedDateRange.endDate}.`;
+}
+
+function getDateInputSlotProps(allowedDateRange: DateRange | null) {
+  return {
+    inputLabel: { shrink: true },
+    htmlInput:
+      allowedDateRange === null
+        ? {}
+        : {
+            min: allowedDateRange.startDate,
+            max: allowedDateRange.endDate,
+          },
+  };
 }
 
 function validateNonNegativeNumber(
@@ -346,28 +430,4 @@ function validateMoneyField(
   if (!isValidMoneyInput(value)) {
     errors[field] = 'Ingrese un monto valido con maximo 2 decimales.';
   }
-}
-
-function collectDescendantUuids(tasks: readonly Task[], rootTaskUuid: string): Set<string> {
-  const descendants = new Set<string>();
-  const stack = tasks
-    .filter((candidate) => candidate.parentTaskUuid === rootTaskUuid)
-    .map((candidate) => candidate.uuid);
-
-  while (stack.length > 0) {
-    const currentUuid = stack.pop();
-
-    if (currentUuid === undefined || descendants.has(currentUuid)) {
-      continue;
-    }
-
-    descendants.add(currentUuid);
-    stack.push(
-      ...tasks
-        .filter((candidate) => candidate.parentTaskUuid === currentUuid)
-        .map((candidate) => candidate.uuid),
-    );
-  }
-
-  return descendants;
 }
