@@ -34,6 +34,12 @@ interface TaskSchedule {
   endDate: string;
 }
 
+interface InitialResponsible {
+  userUuid: string;
+  user: ProjectMember['user'];
+  assignedHours: string;
+}
+
 @Injectable()
 export class TasksService {
   constructor(
@@ -71,6 +77,11 @@ export class TasksService {
     const plannedBudget = normalizeMoney(createTaskDto.plannedBudget ?? '0.00');
     const actualCost = normalizeMoney(createTaskDto.actualCost ?? '0.00');
     const status = createTaskDto.status ?? TaskStatus.PENDING;
+    const initialResponsible = await this.resolveInitialResponsible(
+      project.uuid,
+      createTaskDto.responsibleUserUuid ?? null,
+      createTaskDto.responsibleAssignedHours ?? 0,
+    );
 
     if (parentTask !== null) {
       this.ensureParentTaskCanAcceptSubtasks(parentTask);
@@ -98,6 +109,19 @@ export class TasksService {
         actualCost,
       }),
     );
+
+    if (initialResponsible !== null) {
+      const assignment = await this.taskAssignmentsRepository.save(
+        this.taskAssignmentsRepository.create({
+          taskUuid: task.uuid,
+          userUuid: initialResponsible.userUuid,
+          assignedHours: initialResponsible.assignedHours,
+          isMainResponsible: true,
+        }),
+      );
+      assignment.user = initialResponsible.user;
+      task.assignments = [assignment];
+    }
 
     return TaskResponseDto.fromEntity(task);
   }
@@ -402,6 +426,37 @@ export class TasksService {
     });
 
     return membershipCount > 0;
+  }
+
+  private async resolveInitialResponsible(
+    projectUuid: string,
+    userUuid: string | null,
+    assignedHours: number,
+  ): Promise<InitialResponsible | null> {
+    if (userUuid === null) {
+      return null;
+    }
+
+    const member = await this.projectMembersRepository.findOne({
+      where: { projectUuid, userUuid },
+      relations: { user: true },
+    });
+
+    if (member === null) {
+      throw new BadRequestException(
+        'El responsable principal debe pertenecer al proyecto antes de ser asignado.',
+      );
+    }
+
+    if (!member.user.isActive) {
+      throw new BadRequestException('No se puede asignar un usuario inactivo como responsable principal.');
+    }
+
+    return {
+      userUuid: member.userUuid,
+      user: member.user,
+      assignedHours: formatDecimal(assignedHours),
+    };
   }
 
   private async ensureTaskAssignedToUser(taskUuid: string, userUuid: string): Promise<void> {

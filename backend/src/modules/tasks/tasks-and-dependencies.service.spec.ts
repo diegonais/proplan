@@ -95,6 +95,56 @@ describe('Tasks and task dependencies rules', () => {
     });
   });
 
+  it('creates an activity with an initial main responsible assignment', async () => {
+    await expect(
+      tasksService.create(
+        project.uuid,
+        createTaskInput({
+          responsibleUserUuid: regularUser.uuid,
+          responsibleAssignedHours: 6,
+        }),
+        managerUser,
+      ),
+    ).resolves.toMatchObject({
+      projectUuid: project.uuid,
+      mainResponsible: {
+        uuid: regularUser.uuid,
+        name: `Usuario ${UserRole.USER}`,
+        email: `${regularUser.uuid}@proplan.local`,
+      },
+    });
+
+    expect(taskAssignmentsRepository.assignments).toHaveLength(1);
+    expect(taskAssignmentsRepository.assignments[0]).toMatchObject({
+      userUuid: regularUser.uuid,
+      assignedHours: '6.00',
+      isMainResponsible: true,
+    });
+  });
+
+  it('rejects an initial responsible who is not an active project member', async () => {
+    await expect(
+      tasksService.create(
+        project.uuid,
+        createTaskInput({ responsibleUserUuid: otherManagerUser.uuid }),
+        managerUser,
+      ),
+    ).rejects.toThrow('pertenecer al proyecto');
+
+    const inactiveUserUuid = '55555555-5555-4555-8555-555555555555';
+    projectMembersRepository.members.push(
+      createProjectMember(project.uuid, inactiveUserUuid, { isActive: false }),
+    );
+
+    await expect(
+      tasksService.create(
+        project.uuid,
+        createTaskInput({ responsibleUserUuid: inactiveUserUuid }),
+        managerUser,
+      ),
+    ).rejects.toThrow('usuario inactivo');
+  });
+
   it('rejects activities outside the project range', async () => {
     await expect(
       tasksService.create(
@@ -552,14 +602,21 @@ function createProject(overrides: Partial<Project>): Project {
   };
 }
 
-function createProjectMember(projectUuid: string, userUuid: string): ProjectMember {
+function createProjectMember(
+  projectUuid: string,
+  userUuid: string,
+  userOverrides: Partial<User> = {},
+): ProjectMember {
+  const user = createUser(userUuid, UserRole.USER);
+  Object.assign(user, userOverrides);
+
   return {
     uuid: randomUUID(),
     projectUuid,
     userUuid,
     joinedAt: new Date('2026-07-24T18:30:00.000Z'),
     project: createProject({ uuid: projectUuid }),
-    user: createUser(userUuid, UserRole.USER),
+    user,
   };
 }
 
@@ -594,15 +651,16 @@ function createTaskAssignment(
   taskUuid: string,
   userUuid: string,
   isMainResponsible = false,
+  overrides: Partial<TaskAssignment> = {},
 ): TaskAssignment {
   return {
-    uuid: randomUUID(),
+    uuid: overrides.uuid ?? randomUUID(),
     taskUuid,
     userUuid,
-    assignedHours: '0.00',
+    assignedHours: overrides.assignedHours ?? '0.00',
     isMainResponsible,
-    task: createTask('', { uuid: taskUuid }),
-    user: createUser(userUuid, UserRole.USER),
+    task: overrides.task ?? createTask('', { uuid: taskUuid }),
+    user: overrides.user ?? createUser(userUuid, UserRole.USER),
   };
 }
 
@@ -631,7 +689,7 @@ class InMemoryProjectsRepository {
 }
 
 class InMemoryProjectMembersRepository {
-  constructor(private readonly members: ProjectMember[]) {}
+  constructor(readonly members: ProjectMember[]) {}
 
   count(options: { where: Partial<ProjectMember> }): Promise<number> {
     return Promise.resolve(
@@ -640,6 +698,16 @@ class InMemoryProjectMembersRepository {
           ([key, value]) => member[key as keyof ProjectMember] === value,
         ),
       ).length,
+    );
+  }
+
+  findOne(options: { where: Partial<ProjectMember>; relations?: unknown }): Promise<ProjectMember | null> {
+    return Promise.resolve(
+      this.members.find((member) =>
+        Object.entries(options.where).every(
+          ([key, value]) => member[key as keyof ProjectMember] === value,
+        ),
+      ) ?? null,
     );
   }
 }
@@ -696,6 +764,17 @@ class InMemoryTasksRepository {
 
 class InMemoryTaskAssignmentsRepository {
   assignments: TaskAssignment[] = [];
+
+  create(input: Partial<TaskAssignment>): TaskAssignment {
+    return createTaskAssignment(input.taskUuid ?? '', input.userUuid ?? '', input.isMainResponsible ?? false, {
+      assignedHours: input.assignedHours,
+    });
+  }
+
+  save(assignment: TaskAssignment): Promise<TaskAssignment> {
+    this.assignments.push(assignment);
+    return Promise.resolve(assignment);
+  }
 
   find(options: { where: Partial<TaskAssignment> }): Promise<TaskAssignment[]> {
     return Promise.resolve(

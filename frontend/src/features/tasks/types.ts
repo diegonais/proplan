@@ -36,6 +36,8 @@ export interface TaskPayload {
   plannedBudget: string;
   actualCost: string;
   parentTaskUuid?: string | null;
+  responsibleUserUuid?: string | null;
+  responsibleAssignedHours?: number;
 }
 
 export interface TaskProgressPayload {
@@ -54,6 +56,8 @@ export interface TaskFormValues {
   plannedBudget: string;
   actualCost: string;
   parentTaskUuid: string;
+  responsibleUserUuid: string;
+  responsibleAssignedHours: string;
 }
 
 export interface TaskDependency {

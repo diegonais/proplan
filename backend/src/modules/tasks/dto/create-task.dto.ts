@@ -101,6 +101,27 @@ export class CreateTaskDto {
   @IsOptional()
   @IsUUID()
   parentTaskUuid?: string | null;
+
+  @ApiPropertyOptional({
+    example: '6f1fbb9d-5cc8-4b20-a1b5-fb5d42f3a541',
+    description:
+      'UUID de un miembro activo del proyecto que quedara asignado como responsable principal inicial.',
+  })
+  @IsOptional()
+  @IsUUID()
+  responsibleUserUuid?: string | null;
+
+  @ApiPropertyOptional({
+    example: 8,
+    minimum: 0,
+    default: 0,
+    description: 'Horas asignadas al responsable principal inicial cuando se envia responsibleUserUuid.',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => normalizeNumberInput(value))
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  responsibleAssignedHours?: number;
 }
 
 function normalizeOptionalText(value: unknown): unknown {

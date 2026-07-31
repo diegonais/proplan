@@ -388,6 +388,7 @@ export function ProjectTasksTab({ project, canManage, isPersonalActivityView }: 
         open={formState !== null}
         mode={formState?.mode ?? 'create'}
         taskKind={formState?.taskKind ?? 'activity'}
+        projectUuid={project.uuid}
         projectDateRange={{ startDate: project.startDate, endDate: project.endDate }}
         tasks={tasks}
         task={formState?.task}

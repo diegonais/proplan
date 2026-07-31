@@ -13,6 +13,9 @@ import {
 import { SyntheticEvent, useEffect, useMemo, useState } from 'react';
 
 import { compareMoney, isValidMoneyInput, normalizeMoneyInput } from '../../../utils/money';
+import { getRoleLabel } from '../../auth/types';
+import { listProjectMembers } from '../../team/services/teamApi';
+import { ProjectMember } from '../../team/types';
 import { Task, TaskFormValues, TaskPayload, getTaskStatusLabel, taskStatuses } from '../types';
 
 interface DateRange {
@@ -24,6 +27,7 @@ interface TaskFormDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
   taskKind: 'activity' | 'subactivity';
+  projectUuid: string;
   projectDateRange: DateRange;
   tasks: readonly Task[];
   task?: Task | null;
@@ -47,12 +51,15 @@ const emptyValues: TaskFormValues = {
   plannedBudget: '0',
   actualCost: '0',
   parentTaskUuid: '',
+  responsibleUserUuid: '',
+  responsibleAssignedHours: '0',
 };
 
 export function TaskFormDialog({
   open,
   mode,
   taskKind,
+  projectUuid,
   projectDateRange,
   tasks,
   task,
@@ -75,6 +82,8 @@ export function TaskFormDialog({
         plannedBudget: task.plannedBudget ?? '0.00',
         actualCost: task.actualCost ?? '0.00',
         parentTaskUuid: taskKind === 'subactivity' ? (task.parentTaskUuid ?? '') : '',
+        responsibleUserUuid: '',
+        responsibleAssignedHours: '0',
       };
     }
 
@@ -85,6 +94,8 @@ export function TaskFormDialog({
   }, [parentTaskUuid, task, taskKind]);
   const [values, setValues] = useState<TaskFormValues>(initialValues);
   const [errors, setErrors] = useState<TaskFormErrors>({});
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+  const [membersError, setMembersError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -92,6 +103,36 @@ export function TaskFormDialog({
       setErrors({});
     }
   }, [initialValues, open]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!open || mode !== 'create') {
+      setProjectMembers([]);
+      setMembersError(null);
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    listProjectMembers(projectUuid)
+      .then((members) => {
+        if (isCurrent) {
+          setProjectMembers(members);
+          setMembersError(null);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setProjectMembers([]);
+          setMembersError('No se pudo cargar el equipo del proyecto.');
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [mode, open, projectUuid]);
 
   const parentOptions = tasks.filter(
     (candidate) => candidate.parentTaskUuid === null && candidate.uuid !== task?.uuid,
@@ -109,6 +150,7 @@ export function TaskFormDialog({
             startDate: selectedParentTask.startDate,
             endDate: selectedParentTask.endDate,
           };
+  const activeProjectMembers = projectMembers.filter((member) => member.user.isActive);
 
   const updateField = (field: keyof TaskFormValues, value: string) => {
     setValues((currentValues) => ({
@@ -137,6 +179,14 @@ export function TaskFormDialog({
       plannedBudget: normalizeMoneyInput(values.plannedBudget),
       actualCost: normalizeMoneyInput(values.actualCost),
       parentTaskUuid: taskKind === 'subactivity' ? values.parentTaskUuid : null,
+      responsibleUserUuid:
+        mode === 'create' && values.responsibleUserUuid.length > 0
+          ? values.responsibleUserUuid
+          : null,
+      responsibleAssignedHours:
+        mode === 'create' && values.responsibleUserUuid.length > 0
+          ? Number(values.responsibleAssignedHours)
+          : undefined,
     });
   };
 
@@ -203,6 +253,46 @@ export function TaskFormDialog({
           ) : null}
 
           <Alert severity="info">{getDateRangeMessage(taskKind, allowedDateRange)}</Alert>
+
+          {mode === 'create' ? (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Responsable principal"
+                select
+                value={values.responsibleUserUuid}
+                onChange={(event) => {
+                  updateField('responsibleUserUuid', event.target.value);
+                }}
+                error={errors.responsibleUserUuid !== undefined || membersError !== null}
+                helperText={
+                  errors.responsibleUserUuid ??
+                  membersError ??
+                  'Opcional. Solo miembros activos del proyecto.'
+                }
+                sx={{ flex: 1 }}
+              >
+                <MenuItem value="">Sin responsable inicial</MenuItem>
+                {activeProjectMembers.map((member) => (
+                  <MenuItem key={member.userUuid} value={member.userUuid}>
+                    {member.user.name} - {getRoleLabel(member.user.role)}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                label="Horas asignadas"
+                type="number"
+                value={values.responsibleAssignedHours}
+                onChange={(event) => {
+                  updateField('responsibleAssignedHours', event.target.value);
+                }}
+                error={errors.responsibleAssignedHours !== undefined}
+                helperText={errors.responsibleAssignedHours ?? 'Horas del responsable inicial.'}
+                disabled={values.responsibleUserUuid.length === 0}
+                slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+                sx={{ width: { xs: '100%', sm: 190 } }}
+              />
+            </Stack>
+          ) : null}
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
@@ -366,6 +456,9 @@ function validateTaskForm(
   }
 
   validateNonNegativeNumber(values.estimatedHours, 'estimatedHours', errors);
+  if (values.responsibleUserUuid.length > 0) {
+    validateNonNegativeNumber(values.responsibleAssignedHours, 'responsibleAssignedHours', errors);
+  }
   validateMoneyField(values.plannedBudget, 'plannedBudget', errors);
   validateMoneyField(values.actualCost, 'actualCost', errors);
 
@@ -426,7 +519,7 @@ function getDateInputSlotProps(allowedDateRange: DateRange | null) {
 
 function validateNonNegativeNumber(
   value: string,
-  field: 'estimatedHours',
+  field: 'estimatedHours' | 'responsibleAssignedHours',
   errors: TaskFormErrors,
 ): void {
   if (value.length === 0 || Number.isNaN(Number(value))) {

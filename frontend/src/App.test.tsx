@@ -1071,6 +1071,7 @@ describe('Project detail behavior', () => {
       createMeRoute(projectManagerUser),
       createProjectDetailRoute(),
       createTasksRoute([sampleTask, sampleSubtask]),
+      createProjectMembersRoute([createProjectMember(managedStandardUser)]),
     ]);
 
     render(<App />);
@@ -1104,6 +1105,9 @@ describe('Project detail behavior', () => {
       within(activityDialog).getByText(
         `Rango del proyecto: ${sampleProject.startDate} a ${sampleProject.endDate}.`,
       ),
+    ).toBeInTheDocument();
+    expect(
+      within(activityDialog).getByRole('combobox', { name: 'Responsable principal' }),
     ).toBeInTheDocument();
     const activityDateInputs =
       activityDialog.querySelectorAll<HTMLInputElement>('input[type="date"]');
@@ -2104,6 +2108,17 @@ function createProjectMembersRoute(members: unknown[]) {
       status: 200,
       data: members,
     },
+  };
+}
+
+function createProjectMember(user: AuthenticatedUser) {
+  return {
+    uuid: `${user.uuid}-member`,
+    projectUuid: sampleProject.uuid,
+    userUuid: user.uuid,
+    joinedAt: '2026-07-24T18:30:00.000Z',
+    user,
+    assignedHours: '0.00',
   };
 }
 
